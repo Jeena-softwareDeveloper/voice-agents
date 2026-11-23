@@ -1063,7 +1063,60 @@ export class AiCallingService {
    * Get Test Session History
    */
   async getTestSessionHistory(tenantId: string, serviceId?: string) {
-    return this.sarvamSocket.getTestSessions(tenantId, serviceId);
+    const memorySessions = this.sarvamSocket.getTestSessions(tenantId, serviceId);
+
+    // Also include recent DB calls for this tenant so real call records are preserved
+    try {
+      const dbCalls = await this.prisma.call.findMany({
+        where: {
+          tenantId,
+          ...(serviceId && serviceId !== 'default_service' ? { serviceId } : {}),
+        },
+        include: {
+          service: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+
+      const dbSessions: any[] = dbCalls.map((c) => {
+        let parsedTranscript: any[] = [];
+        if (c.transcript) {
+          try {
+            parsedTranscript = typeof c.transcript === 'string' ? JSON.parse(c.transcript) : c.transcript;
+          } catch {
+            parsedTranscript = [{ role: 'bot', content: c.transcript, timestamp: Date.now() }];
+          }
+        }
+        return {
+          id: c.id,
+          tenantId: c.tenantId,
+          serviceId: c.serviceId,
+          serviceName: c.service?.name || 'Voice Service',
+          agentVersion: 'v1',
+          mode: 'phone',
+          language: 'hi-IN',
+          voice: 'kavya',
+          durationSeconds: c.durationSeconds || 0,
+          createdAt: c.createdAt.toISOString(),
+          scenario: `Outbound Phone Call to ${c.recipientNumber}`,
+          disposition: c.status || 'COMPLETED',
+          recipientNumber: c.recipientNumber,
+          transcript: parsedTranscript,
+          outputVariables: { customerPhone: c.recipientNumber },
+        };
+      });
+
+      const combined = [...memorySessions];
+      for (const d of dbSessions) {
+        if (!combined.some((m) => m.id === d.id)) {
+          combined.push(d);
+        }
+      }
+      return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch {
+      return memorySessions;
+    }
   }
 
   /**
@@ -1077,23 +1130,73 @@ export class AiCallingService {
       throw new BadRequestException('A valid test phone number with country code is required.');
     }
 
-    const services = (this.prisma as any).db?.service || [];
-    const svc = services.find((s: any) => s.id === payload.serviceId && s.tenantId === tenantId) || services[0];
-    const serviceName = svc?.name || 'Consulting Service';
+    const svc = payload.serviceId && payload.serviceId !== 'default_service'
+      ? await this.prisma.service.findFirst({
+          where: { id: payload.serviceId, tenantId },
+          include: { serviceAiConfig: true },
+        })
+      : await this.prisma.service.findFirst({
+          where: { tenantId },
+          include: { serviceAiConfig: true },
+        });
+
+    const agentConfig = await this.prisma.tenantAgentConfiguration.findFirst({
+      where: { tenantId },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    const assignedNumber = await this.prisma.phoneNumber.findFirst({
+      where: { tenantId },
+    });
+
+    const lead = await this.prisma.lead.findFirst({
+      where: { tenantId },
+    });
+
+    const serviceName = svc?.name || 'Villa Sales Consultation';
+    const callerNumber = assignedNumber?.e164Number || '+18005550199';
+    const externalCallId = `srv_call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    // Create call record in PostgreSQL to preserve tenant isolation and history
+    let callRecord: any = null;
+    if (lead && svc) {
+      try {
+        callRecord = await this.prisma.call.create({
+          data: {
+            tenantId,
+            leadId: lead.id,
+            serviceId: svc.id,
+            callerNumber,
+            recipientNumber: payload.testPhoneNumber,
+            status: 'IN_PROGRESS',
+          },
+        });
+      } catch (err: any) {
+        this.logger.warn(`Could not create database call record: ${err.message}`);
+      }
+    }
 
     const callResult = await this.sarvamService.dispatchOutboundCall({
-      callId: `test_call_${Date.now()}`,
+      callId: callRecord?.id || externalCallId,
       tenantId,
-      leadId: `test_lead_${Date.now()}`,
+      leadId: lead?.id || `test_lead_${Date.now()}`,
       customerName: payload.customerName || 'Test Reviewer',
       phoneNumber: payload.testPhoneNumber,
+      callerNumber,
       config: {
-        companyName: 'Enterprise AI Suite',
+        companyName: tenant?.name || 'Jeenora Workspace',
         serviceName,
-        serviceDescription: `Custom consultation for ${serviceName}`,
-        openingIntro: `Vanakkam! Calling from ${serviceName} support.`,
-        language: 'ta-IN',
-        voice: 'bulbul:v4',
+        serviceDescription: svc?.description || `Custom consultation for ${serviceName}`,
+        openingIntro:
+          svc?.serviceAiConfig?.openingIntro ||
+          agentConfig?.openingGreeting ||
+          `Hello! Calling from ${tenant?.name || 'Jeenora'} regarding ${serviceName}.`,
+        language: (agentConfig?.speakingStyle as any)?.language || 'hi-IN',
+        voice: (agentConfig?.speakingStyle as any)?.speaker || 'kavya',
         maxDurationSeconds: 300,
         bargeInEnabled: true,
         tanglishEnabled: true,
@@ -1104,10 +1207,39 @@ export class AiCallingService {
       },
     });
 
+    // Save initial session entry in test session history
+    try {
+      this.sarvamSocket.saveTestSession({
+        id: callResult.externalCallId || externalCallId,
+        tenantId,
+        serviceId: svc?.id || 'default_service',
+        serviceName,
+        agentVersion: `v${agentConfig?.version || 1}`,
+        mode: 'phone',
+        language: (agentConfig?.speakingStyle as any)?.language || 'hi-IN',
+        voice: (agentConfig?.speakingStyle as any)?.speaker || 'kavya',
+        durationSeconds: 0,
+        outputVariables: { customerPhone: payload.testPhoneNumber },
+        createdAt: new Date().toISOString(),
+        scenario: `Outbound Phone Test to ${payload.testPhoneNumber}`,
+        disposition: 'QUEUED',
+        transcript: [
+          {
+            role: 'bot',
+            content: svc?.serviceAiConfig?.openingIntro || agentConfig?.openingGreeting || `Hello! Calling from ${tenant?.name || 'Jeenora'} regarding ${serviceName}.`,
+            timestamp: Date.now(),
+          },
+        ],
+      });
+    } catch {
+      // ignore
+    }
+
     return {
       success: true,
       message: `Test call dispatched to ${payload.testPhoneNumber}. Your phone should ring momentarily.`,
-      callId: callResult.externalCallId,
+      callId: callRecord?.id || callResult.externalCallId,
+      externalCallId: callResult.externalCallId,
       status: 'INITIATED',
     };
   }

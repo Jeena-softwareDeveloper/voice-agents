@@ -53,6 +53,20 @@ enum CallStatus {
   CANCELLED
 }
 
+enum IntegrationProvider {
+  WHATSAPP
+  FACEBOOK_META
+  GMAIL
+  GOOGLE_CALENDAR
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  NOT_CONNECTED
+  ERROR
+  EXPIRED
+}
+
 enum CallOutcome {
   ANSWERED
   NO_ANSWER
@@ -169,6 +183,9 @@ model Tenant {
   auditLogs         AuditLog[]
   sarvamVoiceSessions SarvamVoiceSession[]
   agentConfigurations TenantAgentConfiguration[]
+  followUpStages      ServiceFollowUpStage[]
+  serviceMarketingMaterials ServiceMarketingMaterial[]
+  integrations        TenantIntegration[]
 
   @@map("tenants")
 }
@@ -264,16 +281,21 @@ model Service {
   location       String?
   pricingInfo    String?
   additionalInfo String?               @db.Text
+  marketLocation String?
+  extractedInfo  Json?
   approvalStatus ServiceApprovalStatus @default(PENDING_APPROVAL)
   isActive       Boolean               @default(true)
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  serviceAiConfig ServiceAiConfig?
-  leads           Lead[]
-  calls           Call[]
-  customers       Customer[]
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceAiConfig    ServiceAiConfig?
+  leads              Lead[]
+  calls              Call[]
+  customers          Customer[]
+  marketingMaterials ServiceMarketingMaterial[]
+  followUpStages     ServiceFollowUpStage[]
+  followUps          FollowUp[]
 
   @@unique([tenantId, name])
   @@map("services")
@@ -314,6 +336,8 @@ model ServiceAiConfig {
   qualificationQuestions Json
   approvedResponses      Json
   objectionHandling      Json
+  talkingPoints          Json?
+  faqs                   Json?
   language               String   @default("hi-IN")
   voice                  String   @default("meera")
   maxDurationSeconds     Int      @default(300)
@@ -484,12 +508,20 @@ model FollowUp {
   dueDate      DateTime
   status       FollowUpStatus   @default(PENDING)
   outcomeNotes String?          @db.Text
+  serviceId    String?
+  stageId      String?
+  currentStage String?
+  meetingStatus String?
+  assignedOwner String?          @default("AI Voice Assistant")
+  callHistory  Json?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lead    Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  contact Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tenant  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead    Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  contact Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  service Service?              @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  stage   ServiceFollowUpStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
@@ -627,23 +659,51 @@ model GlobalSetting {
   @@map("global_settings")
 }
 
+model TelephonyConnection {
+  id              String        @id @default(uuid())
+  tenantId        String
+  name            String
+  providerType    String        // "SARVAM_MANAGED" | "BYOT_SIP_TRUNK" | "BYOT_CARRIER"
+  providerName    String
+  status          String        @default("VERIFIED") // "VERIFIED" | "PENDING_VERIFICATION" | "DISCONNECTED" | "ERROR"
+  isVerified      Boolean       @default(true)
+  config          Json?
+  lastVerifiedAt  DateTime?
+  lastSyncAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  phoneNumbers    PhoneNumber[]
+
+  @@map("telephony_connections")
+}
+
 model PhoneNumber {
-  id               String   @id @default(uuid())
-  number           String   @unique
-  country          String   @default("India")
-  region           String
-  type             String   @default("DID_LOCAL")
-  provider         String   @default("Sarvam / Tata Telephony Trunk")
-  monthlyRent      Decimal  @default(499.00) @db.Decimal(10, 2)
-  status           String   @default("AVAILABLE")
-  assignedTenantId String?
-  renewalDate      DateTime
-  kycStatus        String   @default("VERIFIED")
-  isByot           Boolean  @default(false)
-  active           Boolean  @default(true)
-  allocatedAt      DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                  String               @id @default(uuid())
+  tenantId            String?
+  connectionId        String?
+  providerNumberId    String?              @unique
+  e164Number          String               @unique
+  countryCode         String?              // ISO 3166-1 alpha-2 e.g. "US", "GB", "IN", "SG", "DE"
+  countryName         String?
+  region              String?
+  callingCode         String?              // e.g. "+1", "+44", "+91", "+65"
+  numberType          String               @default("LOCAL") // "LOCAL" | "TOLL_FREE" | "MOBILE" | "NATIONAL"
+  providerStatus      String               @default("ACTIVE") // "ACTIVE" | "PENDING_VERIFICATION" | "FAILED" | "ARCHIVED" | "AVAILABLE"
+  kycStatus           String?              // "VERIFIED" | "PENDING" | "NOT_REQUIRED" | "REJECTED"
+  monthlyRent         Decimal?             @db.Decimal(10, 2)
+  currency            String?              // e.g. "USD", "INR", "GBP", "EUR"
+  renewalDate         DateTime?
+  isByot              Boolean              @default(false)
+  active              Boolean              @default(true)
+  assignedAgentId     String?
+  assignedServiceName String?
+  allocatedAt         DateTime?
+  lastSynchronizedAt  DateTime             @default(now())
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  connection          TelephonyConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
 
   @@map("phone_numbers")
 }
@@ -766,5 +826,77 @@ model AgentConfigurationVersion {
   @@index([tenantId])
   @@map("agent_configuration_versions")
 }
+
+model ServiceMarketingMaterial {
+  id           String   @id @default(uuid())
+  tenantId     String
+  serviceId    String
+  fileName     String
+  fileType     String
+  fileSize     Int?
+  fileUrl      String?  @db.Text
+  rawContent   String?  @db.Text
+  extractedData Json?
+  createdAt    DateTime @default(now())
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@index([tenantId])
+  @@map("service_marketing_materials")
+}
+
+model ServiceFollowUpStage {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  serviceId          String
+  order              Int      @default(1)
+  name               String
+  triggerTiming      String
+  questions          Json
+  expectedResponse   String?  @db.Text
+  nextAction         String
+  callbackScheduling Boolean  @default(true)
+  meetingScheduling  Boolean  @default(false)
+  retryLimit         Int      @default(3)
+  stopConditions     String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  service   Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  followUps FollowUp[]
+
+  @@index([serviceId, order])
+  @@index([tenantId])
+  @@map("service_follow_up_stages")
+}
+
+model TenantIntegration {
+  id                 String              @id @default(uuid())
+  tenantId           String
+  provider           IntegrationProvider
+  status             IntegrationStatus   @default(NOT_CONNECTED)
+  accountIdentifier  String?
+  accountName        String?
+  accessTokenEnc     String?             @db.Text
+  refreshTokenEnc    String?             @db.Text
+  tokenExpiresAt     DateTime?
+  metadata           Json?
+  lastSyncAt         DateTime?
+  errorMessage       String?             @db.Text
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@map("tenant_integrations")
+}
+
+
 
 

@@ -24,6 +24,22 @@ export class CreateServiceDto {
   @IsOptional()
   @IsString()
   additionalInfo?: string;
+
+  @IsOptional()
+  @IsString()
+  marketLocation?: string;
+
+  @IsOptional()
+  extractedInfo?: any;
+
+  @IsOptional()
+  marketingMaterials?: any[];
+
+  @IsOptional()
+  aiCallingConfig?: any;
+
+  @IsOptional()
+  followUpStages?: any[];
 }
 
 export class UpdateServiceDto {

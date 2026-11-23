@@ -21,6 +21,7 @@ import {
   Power,
   ArrowLeft,
   AlertTriangle,
+  Calendar,
 } from 'lucide-react';
 
 export default function ClientServiceDetailPage() {
@@ -82,6 +83,21 @@ export default function ClientServiceDetailPage() {
       toastError('Update Failed', handleApiError(err));
     } finally {
       setIsTogglingActive(false);
+    }
+  };
+
+  const [isApprovingConfig, setIsApprovingConfig] = useState(false);
+  const handleApproveAiConfig = async () => {
+    if (!service) return;
+    setIsApprovingConfig(true);
+    try {
+      const updated = await servicesApi.approveServiceAiConfig(service.id);
+      setService(updated);
+      success('AI Configuration Approved', `'${service.name}' AI calling configuration is now approved and active for outbound calls.`);
+    } catch (err: any) {
+      toastError('Approval Failed', handleApiError(err));
+    } finally {
+      setIsApprovingConfig(false);
     }
   };
 
@@ -262,30 +278,126 @@ export default function ClientServiceDetailPage() {
 
           {service.serviceAiConfig ? (
             <div className="space-y-3 text-xs bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <div>
-                <span className="text-slate-400 font-medium">Active AI Voice:</span>
-                <span className="ml-2 font-semibold text-slate-800 capitalize">{service.serviceAiConfig.voice}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-medium">Language:</span>
-                <span className="ml-2 font-semibold text-slate-800">{service.serviceAiConfig.language}</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 font-medium">Status:</span>
+                  <span className={`ml-2 font-bold px-2 py-0.5 rounded-full text-[10px] ${service.serviceAiConfig.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {service.serviceAiConfig.status || 'DRAFT'}
+                  </span>
+                </div>
+                {service.serviceAiConfig.status !== 'APPROVED' && (
+                  <Button
+                    size="sm"
+                    onClick={handleApproveAiConfig}
+                    isLoading={isApprovingConfig}
+                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
+                  >
+                    Approve Configuration
+                  </Button>
+                )}
               </div>
               <div>
                 <span className="text-slate-400 font-medium">Opening Script Preview:</span>
-                <p className="mt-1 text-slate-600 font-mono text-caption bg-white p-2.5 rounded border border-slate-200 leading-relaxed">
+                <p className="mt-1 text-slate-700 font-mono text-caption bg-white p-2.5 rounded border border-slate-200 leading-relaxed">
                   {service.serviceAiConfig.openingIntro}
                 </p>
               </div>
+              {service.serviceAiConfig.qualificationQuestions && Array.isArray(service.serviceAiConfig.qualificationQuestions) && service.serviceAiConfig.qualificationQuestions.length > 0 && (
+                <div>
+                  <span className="text-slate-400 font-medium">Qualification Questions:</span>
+                  <ul className="mt-1 list-disc list-inside text-caption text-slate-700 space-y-1 bg-white p-2.5 rounded border border-slate-200">
+                    {service.serviceAiConfig.qualificationQuestions.map((q: any, i: number) => (
+                      <li key={i}>{typeof q === 'string' ? q : q.question || JSON.stringify(q)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           ) : (
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-500 space-y-2">
-              <p className="font-semibold text-slate-700">AI Prompt Configuration Pending</p>
+              <p className="font-semibold text-slate-700">AI Calling Configuration Draft</p>
               <p className="leading-relaxed">
-                The Platform Administrator is reviewing this service to configure its specialized AI voice prompt, qualification questions, and objection handling rules.
+                Initial configuration is being finalized. You can approve or modify instructions via the AI Calling page.
               </p>
             </div>
           )}
         </div>
+      </div>
+
+      {/* Follow-up Workflow Stages Section */}
+      <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-bold text-slate-900">
+              Configured Follow-up Workflow Stages ({service.followUpStages?.length || 0})
+            </h3>
+          </div>
+          <span className="text-caption text-slate-400 font-medium">Sequential Customer Progression</span>
+        </div>
+
+        {service.followUpStages && service.followUpStages.length > 0 ? (
+          <div className="space-y-3">
+            {service.followUpStages.map((stage: any, idx: number) => (
+              <div
+                key={stage.id || idx}
+                className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-white transition-all space-y-2.5 text-xs"
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-6 h-6 rounded-md bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
+                      {stage.order}
+                    </span>
+                    <span className="font-bold text-slate-900 text-xs">{stage.name}</span>
+                    <span className="text-caption text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                      Trigger: {stage.triggerTiming}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {stage.callbackScheduling && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        Callback
+                      </span>
+                    )}
+                    {stage.meetingScheduling && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                        Site Visit / Meeting
+                      </span>
+                    )}
+                    <span className="text-caption text-slate-400">Max {stage.retryLimit || 3} Retries</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-caption pt-1 border-t border-slate-100">
+                  <div>
+                    <span className="text-slate-400 font-medium block">Next Action:</span>
+                    <span className="text-slate-800 font-semibold">{stage.nextAction}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-medium block">Stop Condition:</span>
+                    <span className="text-slate-600">{stage.stopConditions || 'Customer Opt-Out'}</span>
+                  </div>
+                </div>
+
+                {stage.questions && Array.isArray(stage.questions) && stage.questions.length > 0 && (
+                  <div className="pt-1">
+                    <span className="text-slate-400 text-caption font-medium block mb-1">Stage Questions:</span>
+                    <ul className="list-disc list-inside text-[11px] text-slate-700 space-y-0.5 pl-1">
+                      {stage.questions.map((q: any, qIdx: number) => (
+                        <li key={qIdx}>{typeof q === 'string' ? q : q.question || JSON.stringify(q)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 text-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">
+            No follow-up workflow stages configured for this service offering.
+          </div>
+        )}
       </div>
 
       {/* Edit Modal */}

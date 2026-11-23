@@ -173,6 +173,18 @@ export default function ClientServicesListPage() {
       cell: (s) => <span className="text-xs font-semibold text-slate-800">{s.pricingInfo || 'Custom'}</span>,
     },
     {
+      id: 'stages',
+      header: 'Follow-up Stages',
+      cell: (s: any) => {
+        const count = s.followUpStages?.length || 0;
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            {count > 0 ? `${count} Stages` : 'Configured'}
+          </span>
+        );
+      },
+    },
+    {
       id: 'approvalStatus',
       header: 'Admin Approval Status',
       sortable: true,

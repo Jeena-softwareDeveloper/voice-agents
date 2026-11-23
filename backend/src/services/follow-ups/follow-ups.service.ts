@@ -31,8 +31,16 @@ export class FollowUpsService {
       where,
       include: {
         contact: true,
+        service: true,
+        stage: true,
         lead: {
-          include: { service: true },
+          include: {
+            service: true,
+            calls: {
+              take: 5,
+              orderBy: { createdAt: 'desc' },
+            },
+          },
         },
       },
       orderBy: { dueDate: 'asc' },
@@ -45,6 +53,11 @@ export class FollowUpsService {
         tenantId,
         contactId: dto.contactId,
         leadId: dto.leadId,
+        serviceId: dto.serviceId,
+        stageId: dto.stageId,
+        currentStage: dto.currentStage,
+        meetingStatus: dto.meetingStatus || (dto.type === 'SITE_VISIT' || dto.type === 'DEMO' ? 'SCHEDULED' : null),
+        assignedOwner: dto.assignedOwner || 'AI Voice Assistant',
         title: dto.title,
         description: dto.description,
         type: dto.type || 'CALLBACK',
@@ -54,7 +67,14 @@ export class FollowUpsService {
       },
       include: {
         contact: true,
-        lead: { include: { service: true } },
+        service: true,
+        stage: true,
+        lead: {
+          include: {
+            service: true,
+            calls: { take: 5, orderBy: { createdAt: 'desc' } },
+          },
+        },
       },
     });
   }
@@ -73,10 +93,21 @@ export class FollowUpsService {
       data: {
         status: dto.status || followUp.status,
         outcomeNotes: dto.outcomeNotes || followUp.outcomeNotes,
+        meetingStatus: dto.meetingStatus !== undefined ? dto.meetingStatus : followUp.meetingStatus,
+        currentStage: dto.currentStage || followUp.currentStage,
+        assignedOwner: dto.assignedOwner || followUp.assignedOwner,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : followUp.dueDate,
       },
       include: {
         contact: true,
-        lead: { include: { service: true } },
+        service: true,
+        stage: true,
+        lead: {
+          include: {
+            service: true,
+            calls: { take: 5, orderBy: { createdAt: 'desc' } },
+          },
+        },
       },
     });
   }

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { ClientSidebar } from '@/components/layout/ClientSidebar';
 import { MobileNavbar } from '@/components/layout/MobileNavbar';
 import { GuidedTour } from '@/components/onboarding/GuidedTour';
@@ -12,6 +13,15 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+  const pathname = usePathname();
+
+  // Reset scroll to top whenever navigating between pages/menus
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+  }, [pathname]);
 
   return (
     <ToastProvider>
@@ -23,7 +33,10 @@ export default function ClientLayout({
         <ClientSidebar onOpenTour={() => setIsTourOpen(true)} />
 
         {/* Main Content Area (100% width on mobile, no sidebar margin) */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full p-3 sm:p-4 lg:p-6 bg-slate-50/70">
+        <main
+          ref={mainRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full p-3 sm:p-4 lg:p-6 bg-slate-50/70"
+        >
           <div className="w-full max-w-full min-w-0">{children}</div>
         </main>
 

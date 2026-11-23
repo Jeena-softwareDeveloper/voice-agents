@@ -95,6 +95,113 @@ export class AiCallingController {
   }
 
   /**
+   * =========================================================================
+   * Dynamic International Caller ID & Telephony Provider Integration
+   * =========================================================================
+   */
+
+  @Get('telephony/connections')
+  async getTenantConnections(@CurrentTenant() tenantId: string) {
+    return this.telephonyService.getTenantConnections(tenantId);
+  }
+
+  @Post('telephony/connections')
+  async addTenantConnection(
+    @CurrentTenant() tenantId: string,
+    @Body() payload: {
+      name: string;
+      providerType: 'SARVAM_MANAGED' | 'BYOT_SIP_TRUNK' | 'BYOT_CARRIER';
+      carrierName?: string;
+      sipTrunkHost?: string;
+      accountSid?: string;
+      authToken?: string;
+    },
+  ) {
+    return this.telephonyService.addConnection(tenantId, payload);
+  }
+
+  @Post('telephony/connections/:id/refresh')
+  async refreshConnection(
+    @CurrentTenant() tenantId: string,
+    @Param('id') connectionId: string,
+  ) {
+    return this.telephonyService.refreshConnection(tenantId, connectionId);
+  }
+
+  @Get('telephony/catalog')
+  async getNumberCatalog(
+    @CurrentTenant() tenantId: string,
+    @Query('countryCode') countryCode?: string,
+    @Query('numberType') numberType?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.telephonyService.getNumberCatalog(tenantId, {
+      countryCode,
+      numberType,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+  }
+
+  @Get('telephony/numbers')
+  async getTenantNumbers(@CurrentTenant() tenantId: string) {
+    return this.telephonyService.getTenantNumbers(tenantId);
+  }
+
+  @Get('telephony/numbers/:id')
+  async getNumberDetails(
+    @CurrentTenant() tenantId: string,
+    @Param('id') numberId: string,
+  ) {
+    return this.telephonyService.getNumberDetails(tenantId, numberId);
+  }
+
+  @Post('telephony/numbers/byot')
+  async registerByotNumber(
+    @CurrentTenant() tenantId: string,
+    @Body() payload: any,
+  ) {
+    return this.telephonyService.registerByotNumber(tenantId, payload);
+  }
+
+  @Post('telephony/numbers/purchase')
+  async purchaseCatalogNumber(
+    @CurrentTenant() tenantId: string,
+    @Body() payload: any,
+  ) {
+    return this.telephonyService.purchaseNumber(tenantId, payload);
+  }
+
+  @Put('telephony/numbers/:id/assign')
+  async assignNumber(
+    @CurrentTenant() tenantId: string,
+    @Param('id') numberId: string,
+    @Body() payload: { agentId?: string; serviceName?: string },
+  ) {
+    return this.telephonyService.assignNumber(tenantId, numberId, payload);
+  }
+
+  @Get('telephony/numbers/:id/usage')
+  async checkNumberUsage(
+    @CurrentTenant() tenantId: string,
+    @Param('id') numberId: string,
+  ) {
+    return this.telephonyService.checkNumberUsage(tenantId, numberId);
+  }
+
+  @Delete('telephony/numbers/:id')
+  async releaseNumber(
+    @CurrentTenant() tenantId: string,
+    @Param('id') numberId: string,
+    @Query('force') force?: string,
+  ) {
+    return this.telephonyService.releaseNumber(tenantId, numberId, force === 'true');
+  }
+
+  /**
    * Client Phone Numbers: Current assigned number + available numbers to purchase
    */
   @Get('phone-numbers')
@@ -122,12 +229,9 @@ export class AiCallingController {
   async releaseTenantNumber(
     @CurrentTenant() tenantId: string,
     @Param('numberId') numberId: string,
+    @Query('force') force?: string,
   ) {
-    const assigned = await this.telephonyService.getTenantNumber(tenantId);
-    if (!assigned || assigned.id !== numberId) {
-      throw new BadRequestException('This phone number is not assigned to your account.');
-    }
-    return this.telephonyService.releaseNumber(numberId);
+    return this.telephonyService.releaseNumber(tenantId, numberId, force === 'true');
   }
 
   /**

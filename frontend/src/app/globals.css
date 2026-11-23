@@ -1,6 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  input,
+  textarea,
+  select,
+  button {
+    outline: none;
+  }
+  input:focus,
+  textarea:focus,
+  select:focus,
+  button:focus,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  button:focus-visible {
+    outline: none !important;
+  }
+}
 
 :root {
   --foreground-rgb: 15, 23, 42;
@@ -8,7 +29,7 @@
   --background-end-rgb: 241, 245, 249;
 
   /* Central Typography System Tokens */
-  --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-family-base: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   /* Font Sizes */
@@ -49,6 +70,8 @@ body {
   background: #f8fafc;
   font-family: var(--font-family-base);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Custom scrollbars for high density tables and cards */

@@ -1,6 +1,17 @@
 import { api } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
-import { Call, TelephonyNumber, TenantVoicePreference, SarvamVoice, SarvamLanguage, AgentConfiguration, ProviderCapabilities } from '@/types';
+import {
+  Call,
+  TelephonyNumber,
+  TelephonyConnection,
+  NumberCatalogResult,
+  RegisterByotPayload,
+  TenantVoicePreference,
+  SarvamVoice,
+  SarvamLanguage,
+  AgentConfiguration,
+  ProviderCapabilities,
+} from '@/types';
 
 export interface AiCallingOverviewData {
   tenant: {
@@ -51,7 +62,36 @@ export const aiCallingApi = {
       payload,
     ),
 
-  // Phone Numbers
+  // Telephony Connections & Provider Management
+  getConnections: () => api.get<TelephonyConnection[]>('/ai-calling/telephony/connections'),
+  addConnection: (payload: {
+    name: string;
+    providerType: 'SARVAM_MANAGED' | 'BYOT_SIP_TRUNK' | 'BYOT_CARRIER';
+    carrierName?: string;
+    sipTrunkHost?: string;
+    accountSid?: string;
+    authToken?: string;
+  }) => api.post<TelephonyConnection>('/ai-calling/telephony/connections', payload),
+  refreshConnection: (id: string) =>
+    api.post<TelephonyConnection>(`/ai-calling/telephony/connections/${id}/refresh`, {}),
+
+  // Dynamic Number Catalog & Numbers
+  getNumberCatalog: (params?: { countryCode?: string; numberType?: string; search?: string; page?: number; limit?: number }) =>
+    api.get<NumberCatalogResult>('/ai-calling/telephony/catalog', { params }),
+  getTenantNumbers: () => api.get<TelephonyNumber[]>('/ai-calling/telephony/numbers'),
+  getNumberDetails: (id: string) => api.get<TelephonyNumber>(`/ai-calling/telephony/numbers/${id}`),
+  registerByotNumber: (payload: RegisterByotPayload) =>
+    api.post<TelephonyNumber>('/ai-calling/telephony/numbers/byot', payload),
+  purchaseCatalogNumber: (payload: { providerNumberId: string; businessKyc?: any }) =>
+    api.post<TelephonyNumber>('/ai-calling/telephony/numbers/purchase', payload),
+  assignNumber: (id: string, payload: { agentId?: string; serviceName?: string }) =>
+    api.put<TelephonyNumber>(`/ai-calling/telephony/numbers/${id}/assign`, payload),
+  checkNumberUsage: (id: string) =>
+    api.get<{ inUse: boolean; activeDeployments: string[] }>(`/ai-calling/telephony/numbers/${id}/usage`),
+  releaseNumber: (id: string, force: boolean = false) =>
+    api.delete<{ success: boolean; message: string }>(`/ai-calling/telephony/numbers/${id}${force ? '?force=true' : ''}`),
+
+  // Legacy Phone Numbers Interface (Backwards Compatible)
   getPhoneNumbers: () =>
     api.get<{ assigned: TelephonyNumber | null; available: TelephonyNumber[] }>(
       API_ENDPOINTS.WORKSPACE.AI_CALLING.PHONE_NUMBERS,
@@ -62,8 +102,8 @@ export const aiCallingApi = {
     isByot?: boolean;
     byotDetails?: { carrierName?: string; sipTrunkHost?: string; accountSid?: string };
   }) => api.post<TelephonyNumber>(API_ENDPOINTS.WORKSPACE.AI_CALLING.REQUEST_NUMBER, payload),
-  releasePhoneNumber: (numberId: string) =>
-    api.delete<any>(API_ENDPOINTS.WORKSPACE.AI_CALLING.RELEASE_NUMBER(numberId)),
+  releasePhoneNumber: (numberId: string, force: boolean = false) =>
+    api.delete<any>(`${API_ENDPOINTS.WORKSPACE.AI_CALLING.RELEASE_NUMBER(numberId)}${force ? '?force=true' : ''}`),
 
   // Credit Top-Up
   topUpCredits: (amount: number) =>

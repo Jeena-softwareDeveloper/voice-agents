@@ -58,15 +58,13 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({ onOpenTour }) => {
     router.push('/login');
   };
 
-  // Strictly 8 main menus for Client CRM
+  // Strictly 6 main menus for Client CRM
   const navItems = [
     { label: 'Dashboard', href: '/workspace/dashboard', icon: LayoutDashboard },
     { label: 'Calls', href: '/workspace/calls', icon: PhoneCall },
     { label: 'Services', href: '/workspace/services', icon: Layers },
     { label: 'Configuration', href: '/workspace/ai-calling', icon: SlidersHorizontal },
-    { label: 'Sales Pipeline', href: '/workspace/sales-pipeline', icon: GitBranch },
     { label: 'Follow-ups', href: '/workspace/follow-ups', icon: CalendarCheck },
-    { label: 'Customers', href: '/workspace/customers', icon: Users },
     { label: 'Reports', href: '/workspace/reports', icon: BarChart3 },
   ];
 

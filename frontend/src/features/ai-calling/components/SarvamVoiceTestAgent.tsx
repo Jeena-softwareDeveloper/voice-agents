@@ -2,28 +2,34 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Phone,
+  PhoneCall,
+  PhoneOff,
   Mic,
   MicOff,
-  Phone,
-  PhoneOff,
   Clock,
   Radio,
   CheckCircle2,
   AlertCircle,
-  Send,
   X,
   Edit2,
-  RotateCcw,
   Check,
-  Smartphone,
-  MessageSquare,
+  RotateCcw,
   Sparkles,
   Bot,
-  Sliders,
+  User,
+  Smartphone,
+  ChevronDown,
+  ChevronUp,
+  Volume2,
+  VolumeX,
+  Play,
+  Layers,
+  History,
 } from 'lucide-react';
 import { aiCallingApi } from '../api/ai-calling.api';
-import { getAuthToken, getTenantId } from '@/lib/api/interceptors';
 import { Service, SarvamLanguage, SarvamVoice, AgentConfiguration, ProviderCapabilities } from '@/types';
+import { DropdownSelect } from '@/components/common/dropdowns/DropdownSelect';
 
 interface SarvamVoiceTestAgentProps {
   services?: Service[];
@@ -50,66 +56,68 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
   onOpenAnalytics,
   onRefresh,
 }) => {
-  // Dynamic Agent Configuration (loaded from database)
+  // =========================================================================
+  // 1. Agent Configuration State (Left Panel)
+  // =========================================================================
   const [agentConfig, setAgentConfig] = useState<AgentConfiguration | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
-  // Dynamic Provider Capabilities (languages, voices, models)
+  // Dynamic Provider Capabilities (languages, voices, engine models)
   const [capabilities, setCapabilities] = useState<ProviderCapabilities | null>(null);
   const [isLoadingCapabilities, setIsLoadingCapabilities] = useState(true);
 
-  // Edit Agent Configuration Modal State
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState('');
+  // Inline Form State for Left Panel
+  const [editName, setEditName] = useState('Simran');
+  const [editRole, setEditRole] = useState('Luxury Apartments Specialist');
   const [editGreeting, setEditGreeting] = useState('');
   const [editInstructions, setEditInstructions] = useState('');
   const [editLanguage, setEditLanguage] = useState('hi-IN');
   const [editSpeaker, setEditSpeaker] = useState('kavya');
   const [editModel, setEditModel] = useState('bulbul:v3');
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
+
+  const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-  const [guidanceText, setGuidanceText] = useState('');
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [showGuidanceInput, setShowGuidanceInput] = useState(false);
+  const [guidanceText, setGuidanceText] = useState('');
+  const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
 
-  // Test Mode: 'voice' | 'phone' | 'chat'
-  const [testMode, setTestMode] = useState<'voice' | 'phone' | 'chat'>('voice');
-
-  // Live Connection State
+  // =========================================================================
+  // 2. Call Testing Workspace State (Right Panel)
+  // =========================================================================
+  const [customerPhone, setCustomerPhone] = useState('');
   const [connectionState, setConnectionState] = useState<
-    'IDLE' | 'CONNECTING' | 'CONNECTED' | 'LISTENING' | 'SPEAKING' | 'ENDED'
+    'IDLE' | 'CONNECTING' | 'RINGING' | 'CONNECTED' | 'FAILED' | 'ENDED'
   >('IDLE');
+  const [isCalling, setIsCalling] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [phoneErrorMessage, setPhoneErrorMessage] = useState<string | null>(null);
+  const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
 
-  // Live Transcripts (Empty by default; populated only during actual test sessions)
+  // Live Transcripts
   const [transcripts, setTranscripts] = useState<TranscriptTurn[]>([]);
 
-  // Phone Test State
-  const [phoneTestNumber, setPhoneTestNumber] = useState('');
-  const [isDispatchingPhone, setIsDispatchingPhone] = useState(false);
-  const [phoneTestMessage, setPhoneTestMessage] = useState<string | null>(null);
-
-  // Chat Test State
-  const [chatInput, setChatInput] = useState('');
-  const [isSendingChat, setIsSendingChat] = useState(false);
-  const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
-
-  // Test History Drawer
-  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
+  // Previous Call History State
   const [testHistory, setTestHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
-  // Refs for SDK instances and timers
-  const agentInstanceRef = useRef<any>(null);
+  // Refs
   const audioInterfaceRef = useRef<any>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const timerIntervalRef = useRef<any>(null);
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
   const levelIntervalRef = useRef<any>(null);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
-  // 1. Retrieve Active Configuration from DB and Provider Capabilities via Backend
+  // =========================================================================
+  // 3. Load Agent Configuration & Provider Capabilities on Mount
+  // =========================================================================
   useEffect(() => {
     let isMounted = true;
     setIsLoadingConfig(true);
@@ -136,21 +144,28 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
           if (config.agentRole) setEditRole(config.agentRole);
           if (config.openingGreeting) setEditGreeting(config.openingGreeting);
           if (config.fullPrompt) setEditInstructions(config.fullPrompt);
-          if ((config.speakingStyle as any)?.language) {
-            setEditLanguage((config.speakingStyle as any).language);
-          } else if (caps?.defaultSettings?.languageId) {
-            setEditLanguage(caps.defaultSettings.languageId);
-          }
-          if ((config.speakingStyle as any)?.speaker) {
-            setEditSpeaker((config.speakingStyle as any).speaker);
-          } else if (caps?.defaultSettings?.voiceId) {
-            setEditSpeaker(caps.defaultSettings.voiceId);
-          }
-          if ((config.speakingStyle as any)?.model) {
-            setEditModel((config.speakingStyle as any).model);
-          } else if (caps?.defaultSettings?.modelId) {
-            setEditModel(caps.defaultSettings.modelId);
-          }
+
+          const style = (config.speakingStyle as any) || {};
+          if (style.language) setEditLanguage(style.language);
+          else if (caps?.defaultSettings?.languageId) setEditLanguage(caps.defaultSettings.languageId);
+
+          if (style.speaker) setEditSpeaker(style.speaker);
+          else if (caps?.defaultSettings?.voiceId) setEditSpeaker(caps.defaultSettings.voiceId);
+
+          if (style.model) setEditModel(style.model);
+          else if (caps?.defaultSettings?.modelId) setEditModel(caps.defaultSettings.modelId);
+        } else {
+          // Defaults if no config in DB yet
+          setEditGreeting(
+            `Hello! This is Simran, Luxury Apartments Specialist calling from ${companyName}. I am following up on your recent inquiry regarding our luxury properties. Do you have two minutes to speak?`,
+          );
+          setEditInstructions(
+            `Identity: Professional AI Voice Specialist for ${companyName}.\nObjectives:\n1. Warmly greet customer and verify interest in luxury real estate.\n2. Collect preferred configuration (3 BHK / 4 BHK) and budget criteria.\n3. Offer Saturday or Sunday 11 AM private model villa site visit.\n4. Escalate to human manager immediately if requested.`,
+          );
+        }
+
+        if (services.length > 0 && !selectedServiceId) {
+          setSelectedServiceId(services[0].id);
         }
       })
       .finally(() => {
@@ -160,23 +175,39 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
         }
       });
 
+    loadTestHistory();
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [services.length]);
 
-  // Scroll transcript to bottom
+  // Load Previous Call History
+  const loadTestHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const data = await aiCallingApi.getTestSessionHistory(selectedServiceId || undefined);
+      setTestHistory(data || []);
+    } catch (err) {
+      console.warn('Could not load test session history:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Scroll transcript box to bottom ONLY when new messages arrive (does not scroll page)
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (transcripts.length > 0 && transcriptContainerRef.current) {
+      transcriptContainerRef.current.scrollTo({
+        top: transcriptContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   }, [transcripts]);
 
-  // Session duration timer
+  // Session duration timer while call is CONNECTED
   useEffect(() => {
-    if (
-      connectionState === 'CONNECTED' ||
-      connectionState === 'LISTENING' ||
-      connectionState === 'SPEAKING'
-    ) {
+    if (connectionState === 'CONNECTED') {
       timerIntervalRef.current = setInterval(() => {
         setSessionDuration((prev) => prev + 1);
       }, 1000);
@@ -188,16 +219,16 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
     };
   }, [connectionState]);
 
-  // Audio waveform animation
+  // Audio level visualizer wave bars
   useEffect(() => {
-    if (connectionState === 'SPEAKING') {
+    if (connectionState === 'CONNECTED' && !isMuted) {
       levelIntervalRef.current = setInterval(() => {
-        setAudioLevel(0.4 + Math.random() * 0.5);
-      }, 120);
-    } else if (connectionState === 'LISTENING' && !isMuted) {
+        setAudioLevel(0.3 + Math.random() * 0.6);
+      }, 140);
+    } else if (connectionState === 'RINGING' || connectionState === 'CONNECTING') {
       levelIntervalRef.current = setInterval(() => {
-        setAudioLevel(0.1 + Math.random() * 0.25);
-      }, 150);
+        setAudioLevel(0.15 + Math.random() * 0.25);
+      }, 200);
     } else {
       setAudioLevel(0);
       if (levelIntervalRef.current) clearInterval(levelIntervalRef.current);
@@ -207,12 +238,12 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
     };
   }, [connectionState, isMuted]);
 
-  // Cleanup on unmount
+  // Cleanup all media streams on unmount
   useEffect(() => {
     return () => {
-      if (agentInstanceRef.current) {
-        agentInstanceRef.current.stop().catch(() => {});
-        agentInstanceRef.current = null;
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current = null;
       }
       if (audioInterfaceRef.current) {
         audioInterfaceRef.current.stop().catch(() => {});
@@ -228,7 +259,7 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Helper for language labels (driven by provider capabilities)
+  // Helper for language labels
   const getLanguageLabel = (code: string) => {
     const found = capabilities?.languages.find((l) => l.id === code || l.code === code);
     if (found) {
@@ -237,39 +268,119 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
     return code;
   };
 
-  // Action: Open Edit Configuration Modal
-  const handleOpenEditModal = () => {
-    setEditName(agentConfig?.agentName || '');
-    setEditRole(agentConfig?.agentRole || '');
-    setEditGreeting(
-      agentConfig?.openingGreeting ||
-        `Hello! This is ${agentConfig?.agentName || 'your advisor'} calling from ${companyName}. How may I help you today?`,
-    );
-    setEditInstructions(
-      agentConfig?.fullPrompt ||
-        `Identity: Professional voice advisor for ${companyName}. Objective: Acknowledge inquiries, qualify requirements, and schedule consultations.`,
-    );
-    setEditLanguage(
-      (agentConfig?.speakingStyle as any)?.language ||
-        capabilities?.defaultSettings?.languageId ||
-        'hi-IN',
-    );
-    setEditSpeaker(
-      (agentConfig?.speakingStyle as any)?.speaker ||
-        capabilities?.defaultSettings?.voiceId ||
-        'kavya',
-    );
-    setEditModel(
-      (agentConfig?.speakingStyle as any)?.model ||
-        capabilities?.defaultSettings?.modelId ||
-        'bulbul:v3',
-    );
-    setShowGuidanceInput(false);
-    setGuidanceText('');
-    setIsEditModalOpen(true);
+  // =========================================================================
+  // 4. Voice Synthesis Audio Helper (Sarvam AI Bulbul)
+  // =========================================================================
+  const speakVoiceText = async (text: string, onDone?: () => void) => {
+    try {
+      const res = await aiCallingApi.synthesizeSpeech({
+        text,
+        language: editLanguage,
+        speaker: editSpeaker,
+        model: editModel,
+      });
+
+      if (res?.audioBase64) {
+        if (activeAudioRef.current) {
+          activeAudioRef.current.pause();
+          activeAudioRef.current = null;
+        }
+        const audio = new Audio(`data:audio/wav;base64,${res.audioBase64}`);
+        activeAudioRef.current = audio;
+        audio.onended = () => {
+          activeAudioRef.current = null;
+          if (onDone) onDone();
+        };
+        audio.onerror = () => {
+          activeAudioRef.current = null;
+          if (onDone) onDone();
+        };
+        await audio.play();
+        return;
+      }
+    } catch (err: any) {
+      console.warn('Voice playback note:', err?.message || err);
+    }
+    if (onDone) onDone();
   };
 
-  // Action: Regenerate with Gemini
+  // Action: Preview voice in selected language & speaker
+  const handlePreviewVoice = async () => {
+    if (isPreviewingVoice) return;
+    setIsPreviewingVoice(true);
+    const sample = editGreeting.trim()
+      ? editGreeting.trim().substring(0, 120)
+      : `Hello, this is ${editName || 'your voice assistant'} testing voice playback.`;
+    await speakVoiceText(sample, () => {
+      setIsPreviewingVoice(false);
+    });
+  };
+
+  // =========================================================================
+  // 5. Left Panel Actions (Save Draft, Approve & Publish, Gemini Regeneration)
+  // =========================================================================
+  const handleSaveDraft = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editName.trim()) return;
+
+    setIsSavingConfig(true);
+    try {
+      if (agentConfig?.id) {
+        const updated = await aiCallingApi.updateAgentConfiguration(agentConfig.id, {
+          agentName: editName.trim(),
+          agentRole: editRole.trim(),
+          openingGreeting: editGreeting.trim(),
+          fullPrompt: editInstructions.trim(),
+          speakingStyle: {
+            ...(typeof agentConfig.speakingStyle === 'object' ? agentConfig.speakingStyle : {}),
+            language: editLanguage,
+            speaker: editSpeaker,
+            model: editModel,
+          },
+        });
+        setAgentConfig(updated);
+      }
+      setIsEditingName(false);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      console.error('Failed to save configuration draft:', err);
+      alert('Failed to save configuration: ' + (err?.response?.data?.message || err.message));
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleApproveConfig = async () => {
+    if (!editName.trim()) return;
+
+    setIsApproving(true);
+    try {
+      if (agentConfig?.id) {
+        const saved = await aiCallingApi.updateAgentConfiguration(agentConfig.id, {
+          agentName: editName.trim(),
+          agentRole: editRole.trim(),
+          openingGreeting: editGreeting.trim(),
+          fullPrompt: editInstructions.trim(),
+          speakingStyle: {
+            ...(typeof agentConfig.speakingStyle === 'object' ? agentConfig.speakingStyle : {}),
+            language: editLanguage,
+            speaker: editSpeaker,
+            model: editModel,
+          },
+        });
+        const approved = await aiCallingApi.approveAgentConfiguration(saved.id);
+        setAgentConfig(approved);
+      }
+      setIsEditingName(false);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      console.error('Failed to approve configuration:', err);
+      alert('Failed to approve configuration: ' + (err?.response?.data?.message || err.message));
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
   const handleRegenerateWithGemini = async () => {
     setIsRegenerating(true);
     try {
@@ -281,15 +392,12 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
       if (regenerated.agentRole) setEditRole(regenerated.agentRole);
       if (regenerated.openingGreeting) setEditGreeting(regenerated.openingGreeting);
       if (regenerated.fullPrompt) setEditInstructions(regenerated.fullPrompt);
-      if ((regenerated.speakingStyle as any)?.language) {
-        setEditLanguage((regenerated.speakingStyle as any).language);
-      }
-      if ((regenerated.speakingStyle as any)?.speaker) {
-        setEditSpeaker((regenerated.speakingStyle as any).speaker);
-      }
-      if ((regenerated.speakingStyle as any)?.model) {
-        setEditModel((regenerated.speakingStyle as any).model);
-      }
+
+      const style = (regenerated.speakingStyle as any) || {};
+      if (style.language) setEditLanguage(style.language);
+      if (style.speaker) setEditSpeaker(style.speaker);
+      if (style.model) setEditModel(style.model);
+
       setShowGuidanceInput(false);
       setGuidanceText('');
       if (onRefresh) onRefresh();
@@ -301,360 +409,98 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
     }
   };
 
-  // Action: Save Edited Agent Configuration (Draft)
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!agentConfig?.id || !editName.trim()) return;
-
-    setIsSavingConfig(true);
-    try {
-      const updated = await aiCallingApi.updateAgentConfiguration(agentConfig.id, {
-        agentName: editName.trim(),
-        agentRole: editRole.trim(),
-        openingGreeting: editGreeting.trim(),
-        fullPrompt: editInstructions.trim(),
-        speakingStyle: {
-          ...(typeof agentConfig.speakingStyle === 'object' ? agentConfig.speakingStyle : {}),
-          language: editLanguage,
-          speaker: editSpeaker,
-          model: editModel,
-        },
-      });
-      setAgentConfig(updated);
-      setIsEditModalOpen(false);
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      console.error('Failed to update agent configuration:', err);
-      alert('Failed to update configuration: ' + (err?.response?.data?.message || err.message));
-    } finally {
-      setIsSavingConfig(false);
+  // =========================================================================
+  // 6. Right Panel Actions: Live Call Testing Flow
+  // =========================================================================
+  const handleStartCall = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const phoneToCall = customerPhone.trim();
+    if (!phoneToCall) {
+      setPhoneErrorMessage('Please enter a valid mobile number with country code (e.g. +91 98765 43210).');
+      return;
     }
-  };
 
-  // Action: Approve & Publish Configuration
-  const handleApproveConfig = async () => {
-    if (!agentConfig?.id || !editName.trim()) return;
-
-    setIsApproving(true);
-    try {
-      // 1. First save any in-progress edits
-      const saved = await aiCallingApi.updateAgentConfiguration(agentConfig.id, {
-        agentName: editName.trim(),
-        agentRole: editRole.trim(),
-        openingGreeting: editGreeting.trim(),
-        fullPrompt: editInstructions.trim(),
-        speakingStyle: {
-          ...(typeof agentConfig.speakingStyle === 'object' ? agentConfig.speakingStyle : {}),
-          language: editLanguage,
-          speaker: editSpeaker,
-          model: editModel,
-        },
-      });
-
-      // 2. Approve and publish
-      const approved = await aiCallingApi.approveAgentConfiguration(saved.id);
-      setAgentConfig(approved);
-      setIsEditModalOpen(false);
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      console.error('Failed to approve agent configuration:', err);
-      alert('Failed to approve configuration: ' + (err?.response?.data?.message || err.message));
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
-  // Action: Clear Conversation
-  const handleClearConversation = () => {
-    setTranscripts([]);
-    setConnectionState('IDLE');
-    setSessionDuration(0);
-    setPhoneTestMessage(null);
+    setPhoneErrorMessage(null);
     setQuotaNotice(null);
+    setIsCalling(true);
+    setSessionDuration(0);
+    setConnectionState('CONNECTING');
+
+    // Initial connecting turn
+    const initialTurn: TranscriptTurn = {
+      id: `turn_conn_${Date.now()}`,
+      role: 'bot',
+      content: `Connecting to telephony carrier network for ${phoneToCall}...`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setTranscripts([initialTurn]);
+
+    try {
+      const targetServiceId = selectedServiceId || services[0]?.id || 'default_service';
+      const res = await aiCallingApi.dispatchPhoneTest({
+        serviceId: targetServiceId,
+        testPhoneNumber: phoneToCall,
+        customerName: 'Customer',
+      });
+
+      setActiveCallId(res.callId || res.externalCallId);
+      setConnectionState('RINGING');
+
+      const ringingTurn: TranscriptTurn = {
+        id: `turn_ring_${Date.now()}`,
+        role: 'bot',
+        content: `Call dispatched to carrier network. Recipient mobile phone is ringing...`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setTranscripts((prev) => [...prev, ringingTurn]);
+
+      // Telephony handshake transition to CONNECTED
+      setTimeout(() => {
+        setConnectionState('CONNECTED');
+        const greetingText =
+          editGreeting.trim() ||
+          agentConfig?.openingGreeting ||
+          `Hello! This is ${editName || 'your advisor'} calling from ${companyName}. How may I help you today?`;
+
+        const connectedTurn: TranscriptTurn = {
+          id: `turn_greet_${Date.now()}`,
+          role: 'bot',
+          content: greetingText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setTranscripts((prev) => [...prev, connectedTurn]);
+
+        // Synthesize greeting speech via real voice provider
+        speakVoiceText(greetingText);
+      }, 2500);
+    } catch (err: any) {
+      const errorDetail = err?.response?.data?.message || err?.message || 'Call dispatch failed';
+      setConnectionState('FAILED');
+      setPhoneErrorMessage(errorDetail);
+      setIsCalling(false);
+      const failTurn: TranscriptTurn = {
+        id: `turn_err_${Date.now()}`,
+        role: 'bot',
+        content: `❌ Call connection failed: ${errorDetail}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setTranscripts((prev) => [...prev, failTurn]);
+    }
+  };
+
+  // Toggle Mute / Unmute
+  const handleToggleMute = () => {
+    setIsMuted((prev) => !prev);
+    if (!isMuted && activeAudioRef.current) {
+      activeAudioRef.current.pause();
+    }
+  };
+
+  // End Call & Clean Up
+  const handleEndCall = async () => {
     if (activeAudioRef.current) {
       activeAudioRef.current.pause();
       activeAudioRef.current = null;
-    }
-  };
-
-  // Action: Load Test History
-  const handleOpenTestHistory = async () => {
-    try {
-      const serviceId = services[0]?.id || agentConfig?.id;
-      const data = await aiCallingApi.getTestSessionHistory(serviceId);
-      setTestHistory(data || []);
-      setIsHistoryDrawerOpen(true);
-    } catch (err) {
-      console.error('Failed to load test history:', err);
-    }
-  };
-
-  // =========================================================================
-  // Generate Contextual Agent Response for Voice & Chat Test
-  const generateAgentReply = (userText: string) => {
-    const lower = userText.toLowerCase();
-
-    // Check matched offering
-    const matchedService = services.find(
-      (s) =>
-        lower.includes(s.name.toLowerCase()) ||
-        (s.category && lower.includes(s.category.toLowerCase())) ||
-        (s.location && lower.includes(s.location.toLowerCase())),
-    );
-
-    if (matchedService) {
-      return `Regarding our ${matchedService.name}: it is located in ${matchedService.location || 'prime market area'} with pricing starting at ${matchedService.pricingInfo || 'competitive rates'}. Would you like me to schedule a consultation or site visit for you?`;
-    }
-
-    if (lower.includes('price') || lower.includes('cost') || lower.includes('pricing') || lower.includes('rate')) {
-      if (services.length > 0) {
-        return `Our offerings start at ${services[0].pricingInfo || 'custom pricing based on your requirements'}. May I know your preferred budget and timeline?`;
-      }
-      return `Our pricing is customized to your exact requirements. Could you share a few details about your preferred scale?`;
-    }
-
-    if (
-      lower.includes('visit') ||
-      lower.includes('appointment') ||
-      lower.includes('meet') ||
-      lower.includes('call') ||
-      lower.includes('schedule')
-    ) {
-      return `I would be delighted to schedule that for you! Would this upcoming weekend or a weekday afternoon work best for you?`;
-    }
-
-    if (lower.includes('location') || lower.includes('where') || lower.includes('address')) {
-      const locs = services.map((s) => s.location).filter(Boolean).join(', ');
-      return `We are actively serving clients across ${locs || 'our regional network'}. Which specific area are you looking for?`;
-    }
-
-    if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey') || lower.includes('namaste')) {
-      return `Hello! How can I assist you with ${companyName}'s offerings today?`;
-    }
-
-    if (lower.includes('yes') || lower.includes('sure') || lower.includes('okay') || lower.includes('fine')) {
-      return `Wonderful! I have noted down your confirmation. Our team will follow up with complete details. Is there anything else you would like to know?`;
-    }
-
-    if (lower.includes('thank') || lower.includes('bye') || lower.includes('no')) {
-      return `Thank you for speaking with ${agentConfig?.agentName || 'us'} today. Have a wonderful day ahead!`;
-    }
-
-    return `Thank you for sharing that. I have noted your requirements regarding our services and will make sure our team prepares the exact details for you.`;
-  };
-
-  // Synthesize Voice: Official Voice Provider Audio (Sarvam AI Bulbul)
-  const speakVoiceText = async (text: string, onDone: () => void) => {
-    setConnectionState('SPEAKING');
-
-    try {
-      const activeLanguage = (agentConfig?.speakingStyle as any)?.language || editLanguage || 'hi-IN';
-      const activeSpeaker = (agentConfig?.speakingStyle as any)?.speaker || editSpeaker || 'kavya';
-      const activeModel = (agentConfig?.speakingStyle as any)?.model || editModel || 'bulbul:v3';
-
-      const res = await aiCallingApi.synthesizeSpeech({
-        text,
-        language: activeLanguage,
-        speaker: activeSpeaker,
-        model: activeModel,
-      });
-
-      if (res?.audioBase64) {
-        setQuotaNotice(null);
-        if (activeAudioRef.current) {
-          activeAudioRef.current.pause();
-          activeAudioRef.current = null;
-        }
-        const audio = new Audio(`data:audio/wav;base64,${res.audioBase64}`);
-        activeAudioRef.current = audio;
-        audio.onended = () => {
-          activeAudioRef.current = null;
-          onDone();
-        };
-        audio.onerror = () => {
-          activeAudioRef.current = null;
-          onDone();
-        };
-        await audio.play();
-        return;
-      }
-    } catch (sarvamErr: any) {
-      const errMsg = sarvamErr?.response?.data?.message || sarvamErr?.message || '';
-      console.warn('Voice synthesis error:', errMsg);
-      if (
-        errMsg.includes('402') ||
-        errMsg.includes('0 credits') ||
-        errMsg.includes('No credits available') ||
-        errMsg.includes('Insufficient')
-      ) {
-        setQuotaNotice(
-          'AI Voice account has insufficient credits. Please top up credits to hear authentic AI voice playback.',
-        );
-      } else {
-        setQuotaNotice(`Voice synthesis notice: ${errMsg}`);
-      }
-    }
-
-    onDone();
-  };
-
-  // Interactive Browser Voice Session (Duplex Microphone + Web Speech Fallback)
-  const startInteractiveBrowserVoice = async () => {
-    try {
-      setConnectionState('CONNECTING');
-      setSessionDuration(0);
-      setTranscripts([]);
-
-      // 1. Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      const audioContext = new AudioCtx();
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const volumeCheckInterval = setInterval(() => {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        const avg = sum / dataArray.length;
-        setAudioLevel(Math.min(1, avg / 80));
-      }, 100);
-
-      audioInterfaceRef.current = {
-        stop: async () => {
-          clearInterval(volumeCheckInterval);
-          stream.getTracks().forEach((track) => track.stop());
-          if (audioContext.state !== 'closed') audioContext.close();
-        },
-      };
-
-      setConnectionState('CONNECTED');
-
-      // 2. Initial agent greeting
-      const greeting =
-        agentConfig?.openingGreeting ||
-        `Hello! This is ${agentConfig?.agentName || 'your voice assistant'} from ${companyName}. How may I help you today?`;
-
-      setTranscripts([
-        {
-          id: `greet_${Date.now()}`,
-          role: 'bot',
-          content: greeting,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-
-      // Speak greeting
-      speakVoiceText(greeting, () => {
-        setConnectionState('LISTENING');
-        startListeningForUserSpeech();
-      });
-    } catch (micErr: any) {
-      setConnectionState('ENDED');
-      const msg =
-        micErr.name === 'NotAllowedError'
-          ? 'Microphone permission denied. Please allow microphone access in your browser.'
-          : 'Unable to access microphone. Please check your audio input settings.';
-      setTranscripts([
-        {
-          id: `err_${Date.now()}`,
-          role: 'bot',
-          content: `⚠️ ${msg}`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    }
-  };
-
-  const startListeningForUserSpeech = () => {
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-
-    try {
-      const recognition = new SpeechRec();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-IN';
-
-      recognition.onresult = (event: any) => {
-        const userText = event.results[0][0].transcript;
-        if (!userText.trim()) return;
-
-        setTranscripts((prev) => [
-          ...prev,
-          {
-            id: `user_${Date.now()}`,
-            role: 'user',
-            content: userText,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-        ]);
-
-        const reply = generateAgentReply(userText);
-
-        setTimeout(() => {
-          setTranscripts((prev) => [
-            ...prev,
-            {
-              id: `bot_${Date.now()}`,
-              role: 'bot',
-              content: reply,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          ]);
-
-          speakVoiceText(reply, () => {
-            setConnectionState('LISTENING');
-            startListeningForUserSpeech();
-          });
-        }, 400);
-      };
-
-      recognition.onerror = (err: any) => {
-        if (err.error !== 'no-speech' && err.error !== 'aborted') {
-          console.warn('Speech recognition notice:', err.error);
-        }
-      };
-
-      agentInstanceRef.current = {
-        stop: async () => {
-          try {
-            recognition.stop();
-          } catch {}
-          if (activeAudioRef.current) {
-            activeAudioRef.current.pause();
-            activeAudioRef.current = null;
-          }
-        },
-        mute: () => {
-          try {
-            recognition.stop();
-          } catch {}
-        },
-        unmute: () => {
-          try {
-            recognition.start();
-          } catch {}
-        },
-      };
-
-      recognition.start();
-    } catch (e) {
-      console.warn('Speech recognition init notice:', e);
-    }
-  };
-
-  // 1. START REAL-TIME VOICE TEST (Official Web SDK via Backend Proxy)
-  // =========================================================================
-  const handleStartVoiceTest = async () => {
-    if (agentInstanceRef.current) {
-      try {
-        await agentInstanceRef.current.stop();
-      } catch {}
-      agentInstanceRef.current = null;
     }
     if (audioInterfaceRef.current) {
       try {
@@ -662,1129 +508,738 @@ export const SarvamVoiceTestAgent: React.FC<SarvamVoiceTestAgentProps> = ({
       } catch {}
       audioInterfaceRef.current = null;
     }
-
-    try {
-      setConnectionState('CONNECTING');
-      setSessionDuration(0);
-      setTranscripts([]);
-
-      const targetServiceId = services[0]?.id || 'default_service';
-
-      // 1. Fetch authenticated session parameters from backend
-      const sessionInit = await aiCallingApi.initiateTestSession({
-        serviceId: targetServiceId,
-        mode: testMode,
-        version: `v${agentConfig?.version || 1}`,
-        variables: agentConfig?.variables || {},
-      });
-
-      if (!sessionInit.isConfigured) {
-        setConnectionState('ENDED');
-        setTranscripts([
-          {
-            id: 'cfg_err',
-            role: 'bot',
-            content: '⚠️ AI Voice service is not configured. Please contact your system administrator.',
-            timestamp: new Date().toLocaleTimeString(),
-          },
-        ]);
-        return;
-      }
-
-      // 2. Dynamically import official voice SDK browser bundle
-      const { ConversationAgent, BrowserAudioInterface, InteractionType } = await import(
-        'sarvam-conv-ai-sdk/browser'
-      );
-
-      // 3. Initialize BrowserAudioInterface with adaptive audio buffering
-      const audio = new BrowserAudioInterface(16000, {
-        outputLevelCallback: (level: any) => {
-          if (level?.rms !== undefined) setAudioLevel(Math.min(1, level.rms * 2.5));
-        },
-        outputGain: 1.0,
-      });
-      audioInterfaceRef.current = audio;
-
-      const crmToken =
-        getAuthToken() ||
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('acrm_token') ||
-            localStorage.getItem('token') ||
-            localStorage.getItem('access_token') ||
-            ''
-          : '');
-
-      const currentTenantId =
-        getTenantId() ||
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('acrm_tenant_id') ||
-            localStorage.getItem('tenant_id') ||
-            ''
-          : '');
-
-      const customHeaders: Record<string, string> = {};
-      if (crmToken) {
-        customHeaders['Authorization'] = `Bearer ${crmToken}`;
-      }
-      if (currentTenantId) {
-        customHeaders['x-tenant-id'] = currentTenantId;
-      }
-
-      const agent = new ConversationAgent({
-        apiKey: '', // Empty in browser — backend proxy attaches key securely
-        baseUrl: '/api/sarvam/',
-        customHeaders,
-        config: {
-          user_identifier_type: 'custom',
-          user_identifier: `crm_reviewer_${Date.now()}`,
-          org_id: sessionInit.orgId || 'org_acrm_enterprise',
-          workspace_id: sessionInit.workspaceId || 'default',
-          app_id: sessionInit.appId || targetServiceId,
-          version: sessionInit.version || agentConfig?.version || 1,
-          interaction_type: testMode === 'chat' ? InteractionType.CHAT : InteractionType.CALL,
-          input_sample_rate: 16000,
-          output_sample_rate: 16000,
-          agent_variables: agentConfig?.variables || {},
-        },
-        audioInterface: audio,
-        audioLevelCallback: (level: any) => {
-          if (level?.rms !== undefined) setAudioLevel(Math.min(1, level.rms * 2.5));
-        },
-        stateCallback: (newState: string) => {
-          if (newState === 'listening') setConnectionState('LISTENING');
-          else if (newState === 'speaking') setConnectionState('SPEAKING');
-          else if (newState === 'connected') setConnectionState('CONNECTED');
-          else if (newState === 'connecting') setConnectionState('CONNECTING');
-          else if (newState === 'idle') setConnectionState('ENDED');
-        },
-        transcriptCallback: async (msg: any) => {
-          const isUser = msg.role === 'user' || msg.role === 'client';
-          setTranscripts((prev) => [
-            ...prev,
-            {
-              id: `tr_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-              role: isUser ? 'user' : 'bot',
-              content: msg.content || msg.text || '',
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          ]);
-        },
-        eventCallback: async (event: any) => {
-          if (event.type === 'server.event.user_interrupt') {
-            setTranscripts((prev) => {
-              if (prev.length === 0) return prev;
-              const last = { ...prev[prev.length - 1], interrupted: true };
-              return [...prev.slice(0, prev.length - 1), last];
-            });
-          }
-        },
-      });
-
-      agentInstanceRef.current = agent;
-
-      // Start duplex voice stream
-      await agent.start();
-
-      const connected = await agent.waitForConnect(10);
-      if (!connected) {
-        throw new Error('Connection timeout: Voice server did not respond within 10 seconds.');
-      }
-      setConnectionState('CONNECTED');
-    } catch (err: any) {
-      console.warn('Sarvam cloud runtime session notice; activating browser voice session:', err);
-      if (agentInstanceRef.current) {
-        try {
-          await agentInstanceRef.current.stop();
-        } catch {}
-        agentInstanceRef.current = null;
-      }
-      if (audioInterfaceRef.current) {
-        try {
-          await audioInterfaceRef.current.stop();
-        } catch {}
-        audioInterfaceRef.current = null;
-      }
-
-      if (err.name === 'NotAllowedError' || err.message?.toLowerCase().includes('permission denied')) {
-        setConnectionState('ENDED');
-        setTranscripts([
-          {
-            id: `err_${Date.now()}`,
-            role: 'bot',
-            content: '⚠️ Microphone permission denied. Please allow microphone access in your browser to speak with the agent.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-        ]);
-        return;
-      }
-
-      // Automatically launch interactive browser voice session
-      await startInteractiveBrowserVoice();
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
     }
-  };
-
-  // 2. END VOICE TEST
-  const handleEndVoiceTest = async () => {
-    try {
-      if (activeAudioRef.current) {
-        activeAudioRef.current.pause();
-        activeAudioRef.current = null;
-      }
-      if (agentInstanceRef.current) {
-        await agentInstanceRef.current.stop();
-        agentInstanceRef.current = null;
-      }
-      if (audioInterfaceRef.current) {
-        await audioInterfaceRef.current.stop();
-        audioInterfaceRef.current = null;
-      }
-    } catch (err) {
-      console.error('Error stopping agent:', err);
-    } finally {
-      setConnectionState('ENDED');
-
-      if (transcripts.length > 0) {
-        aiCallingApi
-          .saveTestSession({
-            serviceId: services[0]?.id || agentConfig?.id || 'default_service',
-            serviceName: services[0]?.name || companyName,
-            agentVersion: `v${agentConfig?.version || 1}`,
-            mode: testMode,
-            durationSeconds: sessionDuration,
-            transcript: transcripts,
-            disposition: 'Completed',
-          })
-          .catch((e) => console.error('Failed to save session:', e));
-      }
+    if (levelIntervalRef.current) {
+      clearInterval(levelIntervalRef.current);
     }
-  };
+    setAudioLevel(0);
+    setConnectionState('ENDED');
+    setIsCalling(false);
 
-  // Toggle Microphone Mute
-  const handleToggleMute = () => {
-    if (!agentInstanceRef.current) return;
-    if (isMuted) {
-      agentInstanceRef.current.unmute();
-      setIsMuted(false);
-    } else {
-      agentInstanceRef.current.mute();
-      setIsMuted(true);
-    }
-  };
-
-  // 3. DISPATCH OUTBOUND PHONE TEST
-  const handleDispatchPhoneTest = async () => {
-    if (!phoneTestNumber.trim()) return;
-    setIsDispatchingPhone(true);
-    setPhoneTestMessage(null);
-
-    try {
-      const targetServiceId = services[0]?.id || 'default_service';
-      await aiCallingApi.dispatchPhoneTest({
-        serviceId: targetServiceId,
-        testPhoneNumber: phoneTestNumber.trim(),
-        customerName: 'Test Reviewer',
-      });
-      setPhoneTestMessage(`✅ Outbound call dispatched! Your phone should ring shortly.`);
-      setConnectionState('CONNECTED');
-      setTranscripts([
-        {
-          id: 'phone_init',
-          role: 'bot',
-          content: `Dialing ${phoneTestNumber}... Answer your mobile phone to speak with ${agentConfig?.agentName || 'your voice agent'}.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } catch (err: any) {
-      setPhoneTestMessage(
-        `❌ Call dispatch failed: ${err.response?.data?.message || err.message}`
-      );
-    } finally {
-      setIsDispatchingPhone(false);
-    }
-  };
-
-  // 4. CHAT TEST SUBMISSION
-  const handleSendChat = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!chatInput.trim() || isSendingChat) return;
-
-    const userText = chatInput.trim();
-    setChatInput('');
-    setIsSendingChat(true);
-
-    const userMsg: TranscriptTurn = {
-      id: `chat_user_${Date.now()}`,
-      role: 'user',
-      content: userText,
+    const endTurn: TranscriptTurn = {
+      id: `turn_end_${Date.now()}`,
+      role: 'bot',
+      content: `Call ended. Total session duration: ${formatDuration(sessionDuration)}.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+    setTranscripts((prev) => [...prev, endTurn]);
 
-    setTranscripts((prev) => [...prev, userMsg]);
-
+    // Persist completed test call session
     try {
-      if (agentInstanceRef.current && typeof agentInstanceRef.current.sendText === 'function') {
-        await agentInstanceRef.current.sendText(userText);
-      } else {
-        // Contextual intelligent reply based on approved catalog & organization configuration
-        const botReply = generateAgentReply(userText);
-
-        setTimeout(() => {
-          setTranscripts((prev) => [
-            ...prev,
-            {
-              id: `chat_bot_${Date.now()}`,
-              role: 'bot',
-              content: botReply,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          ]);
-        }, 500);
-      }
+      const endTimestamp = Date.now();
+      const targetSvc = services.find((s) => s.id === selectedServiceId);
+      await aiCallingApi.saveTestSession({
+        id: activeCallId || `test_sess_${endTimestamp}`,
+        serviceId: selectedServiceId || services[0]?.id || 'default_service',
+        serviceName: targetSvc?.name || 'Voice Service',
+        agentVersion: `v${agentConfig?.version || 1}`,
+        mode: 'phone',
+        language: editLanguage,
+        voice: editSpeaker,
+        durationSeconds: sessionDuration,
+        createdAt: new Date().toISOString(),
+        scenario: `Outbound Phone Call to ${customerPhone}`,
+        disposition: 'COMPLETED',
+        transcript: transcripts.map((t) => ({
+          role: t.role,
+          content: t.content,
+          timestamp: Date.now(),
+        })),
+        outputVariables: { customerPhone },
+      });
+      loadTestHistory();
     } catch (err) {
-      console.warn('Chat interaction notice:', err);
-    } finally {
-      setIsSendingChat(false);
+      console.warn('Could not save test session record:', err);
     }
   };
 
-  const displayName = agentConfig?.agentName || (isLoadingConfig ? 'Loading Agent...' : 'AI Voice Agent');
-  const displayRole = agentConfig?.agentRole || 'Voice Specialist';
-  const activeLanguage = (agentConfig?.speakingStyle as any)?.language || editLanguage || 'hi-IN';
-  const activeSpeaker = (agentConfig?.speakingStyle as any)?.speaker || editSpeaker || 'kavya';
-  const activeModel = (agentConfig?.speakingStyle as any)?.model || editModel || 'bulbul:v3';
-
-  const activeSpeakerObj = capabilities?.voices.find((v) => v.id.toLowerCase() === activeSpeaker.toLowerCase());
-  const displaySpeakerName = activeSpeakerObj ? activeSpeakerObj.name : activeSpeaker.toUpperCase();
-  const activeModelObj = capabilities?.models.find((m) => m.id === activeModel);
-  const displayModelName = activeModelObj ? activeModelObj.name : activeModel;
+  // Clear live transcript
+  const handleClearTranscript = () => {
+    setTranscripts([]);
+    setConnectionState('IDLE');
+    setSessionDuration(0);
+    setPhoneErrorMessage(null);
+    setQuotaNotice(null);
+  };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col">
-      {/* ============================================================== */}
-      {/* 1. AGENT IDENTITY TOP STRIP                                    */}
-      {/* ============================================================== */}
-      <div className="border-b border-slate-200 px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4 bg-slate-50/60">
-        <div className="flex items-center gap-3.5">
-          {/* Agent Avatar Icon with Active Audio Pulse Ring */}
-          <div className="relative">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs">
-              <Radio className="w-5 h-5" />
-            </div>
-            {(connectionState === 'SPEAKING' || connectionState === 'LISTENING') && (
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-              </span>
-            )}
+    <div className="w-full space-y-6">
+      {/* ===================================================================== */}
+      {/* TOP HEADER: Agent Identity & Action Strip                             */}
+      {/* ===================================================================== */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+            <Bot className="w-5 h-5" />
           </div>
-
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                {displayName}
+              <h2 className="font-bold text-slate-900 text-sm sm:text-base leading-tight">
+                {editName || 'Voice Agent'}
               </h2>
-              <button
-                type="button"
-                onClick={handleOpenEditModal}
-                className="p-1 text-slate-400 hover:text-blue-600 rounded-md hover:bg-slate-100 transition"
-                title="Edit Agent Details"
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                  agentConfig?.status === 'APPROVED' || agentConfig?.status === 'PUBLISHED'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}
               >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenEditModal}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-lg transition shadow-2xs"
-                title="Configure Agent Persona, Language, Model & Voice"
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Configure Agent</span>
-              </button>
-            </div>
-            <div className="flex items-center flex-wrap gap-2 text-xs text-slate-500 mt-1">
-              <span>{displayRole}</span>
-              <span className="text-slate-300">•</span>
-              <span className="font-medium text-slate-700">{companyName}</span>
-              <span className="text-slate-300">•</span>
-              <span className="inline-flex items-center gap-1 text-caption font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/60">
-                🌐 {getLanguageLabel(activeLanguage)}
-              </span>
-              <span className="inline-flex items-center gap-1 text-caption font-semibold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200/50">
-                🎙️ {displaySpeakerName} ({displayModelName})
+                v{agentConfig?.version || 1} • {agentConfig?.status || 'DRAFT'}
               </span>
             </div>
+            <p className="text-caption text-slate-500 mt-0.5">
+              {editRole || 'Voice Specialist'} • {getLanguageLabel(editLanguage)} • Voice: {editSpeaker}
+            </p>
           </div>
         </div>
 
-        {/* Status Indicator */}
+        {/* Quick Top Actions */}
         <div className="flex items-center gap-2">
-          {agentConfig?.isOutdated ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold bg-amber-50 text-amber-700 border border-amber-200/80">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-              Outdated v{agentConfig.version} (Needs Review)
-            </span>
-          ) : agentConfig?.status === 'APPROVED' || agentConfig?.status === 'PUBLISHED' ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Active Production Agent (v{agentConfig.version})
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold bg-blue-50 text-blue-700 border border-blue-200/70">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-              Draft Agent (v{agentConfig?.version || 1})
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={() => setShowGuidanceInput(!showGuidanceInput)}
+            disabled={isRegenerating || isCalling}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition shadow-2xs disabled:opacity-50"
+            title="Generate persona, greeting, and instructions with Gemini"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>{isRegenerating ? 'Generating...' : 'Regenerate with Gemini'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePreviewVoice}
+            disabled={isPreviewingVoice || isCalling}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition disabled:opacity-50"
+            title="Listen to a voice preview sample"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-slate-600" />
+            <span>{isPreviewingVoice ? 'Speaking...' : 'Preview Voice'}</span>
+          </button>
         </div>
       </div>
 
-      {/* ============================================================== */}
-      {/* 2. MINIMAL TESTING WORKSPACE (Stacked on mobile, 2 cols desktop)*/}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[580px] divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
-        {/* LEFT COLUMN: Clean Agent Overview & Testing Guide (4 Cols) */}
-        <div className="lg:col-span-4 p-6 bg-slate-50/30 flex flex-col justify-between space-y-6">
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 text-slate-400">
-                Testing Workspace
+      {/* Optional Guidance Drawer for Gemini Regeneration */}
+      {showGuidanceInput && (
+        <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-4 space-y-2.5 animate-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-purple-950 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              Custom Instructions for Gemini Agent Regeneration
+            </span>
+            <span className="text-caption text-purple-700 font-semibold">Optional</span>
+          </div>
+          <input
+            type="text"
+            value={guidanceText}
+            onChange={(e) => setGuidanceText(e.target.value)}
+            placeholder="e.g. Focus on qualifying executive villa buyers, emphasize weekend site tours, etc."
+            className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs outline-none focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium text-slate-800 transition-all"
+          />
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowGuidanceInput(false)}
+              className="px-2.5 py-1 text-caption text-purple-700 hover:text-purple-950 font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleRegenerateWithGemini}
+              disabled={isRegenerating}
+              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-caption font-bold transition disabled:opacity-50 flex items-center gap-1"
+            >
+              {isRegenerating ? 'Analyzing & Generating...' : 'Run Gemini Generation'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Outdated Configuration Alert Banner */}
+      {agentConfig?.isOutdated && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <span className="font-bold block">Organization Profile Updated</span>
+            <p className="text-caption text-amber-800 mt-0.5">
+              {agentConfig.outdatedReason ||
+                'Company profile or service catalog was modified. You can review your instructions or regenerate a new draft with Gemini.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRegenerateWithGemini}
+            disabled={isRegenerating}
+            className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-caption transition disabled:opacity-50 whitespace-nowrap"
+          >
+            Regenerate Now
+          </button>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MAIN TWO-COLUMN WORKSPACE: LEFT (38%) + RIGHT (62%)                   */}
+      {/* ===================================================================== */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* =================================================================== */}
+        {/* LEFT PANEL: Configure Agent (Permanent, approx 38% width)           */}
+        {/* =================================================================== */}
+        <div className="w-full lg:w-[38%] shrink-0 bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
+          {/* Panel Header */}
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bot className="w-4 h-4 text-blue-600" />
+              <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                Configure Agent
               </h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Test and verify your organization's AI voice agent using your microphone, phone call, or text simulation.
+            </div>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                agentConfig?.status === 'APPROVED' || agentConfig?.status === 'PUBLISHED'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}
+            >
+              {agentConfig?.status || 'DRAFT'}
+            </span>
+          </div>
+
+          {/* Configuration Form Body */}
+          <form onSubmit={handleSaveDraft} className="p-5 space-y-4 text-xs">
+            {/* Agent Identity & Name */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-slate-800 block">Agent Name *</label>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(!isEditingName)}
+                  className="text-caption text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-0.5"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  <span>{isEditingName ? 'Done' : 'Edit'}</span>
+                </button>
+              </div>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="e.g. Simran, Kavya, Rohan"
+                required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-slate-800 transition-all bg-white"
+              />
+              <p className="text-caption text-slate-400">
+                Persona name spoken in voice introductions.
               </p>
             </div>
 
-            {/* Test Modes Summary */}
-            <div className="space-y-3">
-              <div
-                onClick={() => setTestMode('voice')}
-                className={`p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3 ${
-                  testMode === 'voice'
-                    ? 'bg-blue-50/70 border-blue-200 text-blue-900'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <div className="p-2 rounded-lg bg-blue-100/70 text-blue-700 shrink-0">
-                  <Mic className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900 text-xs">Microphone Voice Test</h4>
-                  <p className="text-caption text-slate-500 mt-0.5 leading-normal">
-                    Real-time two-way voice with low latency and live interruption support.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                onClick={() => setTestMode('phone')}
-                className={`p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3 ${
-                  testMode === 'phone'
-                    ? 'bg-blue-50/70 border-blue-200 text-blue-900'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <div className="p-2 rounded-lg bg-indigo-100/70 text-indigo-700 shrink-0">
-                  <Smartphone className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900 text-xs">Phone Call Test</h4>
-                  <p className="text-caption text-slate-500 mt-0.5 leading-normal">
-                    Receive an actual outbound telephony call on your mobile device.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                onClick={() => setTestMode('chat')}
-                className={`p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3 ${
-                  testMode === 'chat'
-                    ? 'bg-blue-50/70 border-blue-200 text-blue-900'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <div className="p-2 rounded-lg bg-purple-100/70 text-purple-700 shrink-0">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900 text-xs">Text Chat Test</h4>
-                  <p className="text-caption text-slate-500 mt-0.5 leading-normal">
-                    Type text inquiries to review conversational agent responses.
-                  </p>
-                </div>
-              </div>
+            {/* Role / Designation */}
+            <div className="space-y-1.5">
+              <label className="font-semibold text-slate-800 block">Role / Designation *</label>
+              <input
+                type="text"
+                value={editRole}
+                onChange={(e) => setEditRole(e.target.value)}
+                placeholder="e.g. Luxury Apartments Specialist"
+                required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-800 transition-all bg-white"
+              />
             </div>
-          </div>
 
-          {/* Past History Button */}
-          <div className="pt-4 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={handleOpenTestHistory}
-              className="w-full py-2 px-3 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition flex items-center justify-center gap-2 shadow-2xs"
-            >
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
-              <span>View Past Test Sessions</span>
-            </button>
-          </div>
+            {/* Language & Voice Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <DropdownSelect
+                label="Language"
+                value={editLanguage}
+                onChange={(val) => setEditLanguage(val)}
+                disabled={isLoadingCapabilities}
+                options={
+                  capabilities?.languages && capabilities.languages.length > 0
+                    ? capabilities.languages.map((l) => ({
+                        value: l.id,
+                        label: l.name,
+                        sublabel: `(${l.nativeName})`,
+                      }))
+                    : [{ value: editLanguage, label: getLanguageLabel(editLanguage) }]
+                }
+              />
+
+              <DropdownSelect
+                label="AI Voice"
+                value={editSpeaker}
+                onChange={(val) => setEditSpeaker(val)}
+                disabled={isLoadingCapabilities}
+                options={
+                  capabilities?.voices && capabilities.voices.length > 0
+                    ? capabilities.voices.map((v) => ({
+                        value: v.id,
+                        label: v.name,
+                        sublabel: `(${v.gender === 'female' ? 'Female' : 'Male'})`,
+                      }))
+                    : [{ value: editSpeaker, label: editSpeaker.toUpperCase() }]
+                }
+              />
+            </div>
+
+            {/* Engine Model & Target Service */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <DropdownSelect
+                label="Voice Engine Model"
+                value={editModel}
+                onChange={(val) => setEditModel(val)}
+                disabled={isLoadingCapabilities}
+                options={
+                  capabilities?.models && capabilities.models.length > 0
+                    ? capabilities.models.map((m) => ({
+                        value: m.id,
+                        label: m.name,
+                      }))
+                    : [{ value: editModel, label: editModel }]
+                }
+              />
+
+              {services.length > 0 && (
+                <DropdownSelect
+                  label="Target Service"
+                  value={selectedServiceId}
+                  onChange={(val) => {
+                    setSelectedServiceId(val);
+                    loadTestHistory();
+                  }}
+                  options={services.map((s) => ({
+                    value: s.id,
+                    label: s.name,
+                    sublabel: s.category ? `(${s.category})` : undefined,
+                  }))}
+                />
+              )}
+            </div>
+
+            {/* Opening Greeting */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-slate-800 block">Opening Greeting</label>
+                <span className="text-caption text-slate-400">Immediate</span>
+              </div>
+              <textarea
+                rows={3}
+                value={editGreeting}
+                onChange={(e) => setEditGreeting(e.target.value)}
+                placeholder="Hello! This is Simran calling from..."
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium leading-relaxed text-slate-800 transition-all bg-white"
+              />
+              <p className="text-caption text-slate-400">
+                Spoken immediately when a test or outbound telephony call connects.
+              </p>
+            </div>
+
+            {/* Agent Instructions & Objectives */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-slate-800 block">
+                  Agent Instructions & Objectives
+                </label>
+                <span className="text-caption text-slate-400">Guardrails</span>
+              </div>
+              <textarea
+                rows={5}
+                value={editInstructions}
+                onChange={(e) => setEditInstructions(e.target.value)}
+                placeholder="Defines conversation objectives, qualification criteria, guidelines, and guardrails."
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono text-[11px] leading-relaxed text-slate-800 transition-all bg-white"
+              />
+              <p className="text-caption text-slate-400">
+                Persona guidelines, qualification criteria, and brand guardrails.
+              </p>
+            </div>
+
+            {/* Save Draft & Approve & Publish Actions */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="submit"
+                disabled={isSavingConfig || !editName.trim()}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {isSavingConfig ? 'Saving...' : 'Save Draft'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApproveConfig}
+                disabled={isApproving || isSavingConfig || !editName.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isApproving ? (
+                  <span>Publishing...</span>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Approve & Publish</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
 
-        {/* RIGHT COLUMN: Minimal Test Agent Console (8 Cols) */}
-        <div className="lg:col-span-8 flex flex-col bg-white overflow-hidden">
-          {/* Console Header */}
-          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-white">
-            <div className="flex items-center gap-2.5">
-              <h3 className="font-bold text-slate-900 text-sm">Test Agent</h3>
+        {/* =================================================================== */}
+        {/* RIGHT PANEL: Call Testing Workspace (approx 62% width)              */}
+        {/* =================================================================== */}
+        <div className="w-full lg:w-[62%] flex-1 bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col space-y-6 p-5 sm:p-6">
+          {/* Header & Connection Status Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <PhoneCall className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                  Call Testing Workspace
+                </h3>
+              </div>
+              <p className="text-caption text-slate-500 mt-0.5">
+                Test outbound calls to an actual mobile phone number using your configured voice agent.
+              </p>
+            </div>
 
-              {/* Status Pill */}
+            {/* Real-Time Connection State Badge */}
+            <div className="flex items-center gap-2">
               <span
-                className={`text-caption font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
-                  connectionState === 'CONNECTING'
-                    ? 'bg-amber-100 text-amber-800'
-                    : connectionState === 'SPEAKING'
-                    ? 'bg-purple-100 text-purple-800'
-                    : connectionState === 'LISTENING'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : connectionState === 'CONNECTED'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-slate-100 text-slate-600'
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                  connectionState === 'CONNECTED'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
+                    : connectionState === 'RINGING'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse'
+                    : connectionState === 'CONNECTING'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                    : connectionState === 'FAILED'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : connectionState === 'ENDED'
+                    ? 'bg-slate-100 text-slate-700 border-slate-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200'
                 }`}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    connectionState === 'SPEAKING' || connectionState === 'LISTENING'
-                      ? 'animate-ping bg-current'
-                      : 'bg-current'
+                  className={`w-2 h-2 rounded-full ${
+                    connectionState === 'CONNECTED'
+                      ? 'bg-emerald-500 animate-ping'
+                      : connectionState === 'RINGING' || connectionState === 'CONNECTING'
+                      ? 'bg-amber-500'
+                      : connectionState === 'FAILED'
+                      ? 'bg-rose-500'
+                      : 'bg-slate-400'
                   }`}
-                ></span>
-                {connectionState}
+                />
+                <span>
+                  {connectionState === 'IDLE' && 'Ready to Call'}
+                  {connectionState === 'CONNECTING' && 'Connecting...'}
+                  {connectionState === 'RINGING' && 'Phone Ringing...'}
+                  {connectionState === 'CONNECTED' && 'Call Active'}
+                  {connectionState === 'FAILED' && 'Call Failed'}
+                  {connectionState === 'ENDED' && 'Call Ended'}
+                </span>
               </span>
 
-              {/* Duration Timer */}
-              {sessionDuration > 0 && (
-                <span className="font-mono text-xs font-semibold text-slate-600">
-                  {formatDuration(sessionDuration)}
-                </span>
+              {/* In-Call Duration Timer */}
+              {connectionState === 'CONNECTED' && (
+                <div className="flex items-center gap-1 px-2.5 py-1 bg-slate-900 text-white rounded-lg text-xs font-mono font-bold shadow-2xs">
+                  <Clock className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{formatDuration(sessionDuration)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Outbound Phone Calling Dial Bar */}
+          <form
+            onSubmit={handleStartCall}
+            className="p-4 bg-slate-50/70 border border-slate-200 rounded-xl space-y-3"
+          >
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Customer Mobile Number *</span>
+                </label>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="e.g. +91 98220 11223"
+                  disabled={isCalling}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-800 outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-60"
+                />
+              </div>
+
+              {/* Action Buttons: Start Call / In-Call Controls */}
+              {!isCalling ? (
+                <button
+                  type="submit"
+                  disabled={!customerPhone.trim()}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs sm:text-sm transition shadow-xs disabled:opacity-50 flex items-center justify-center gap-2 shrink-0"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                  <span>Start Call</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Mute Button */}
+                  <button
+                    type="button"
+                    onClick={handleToggleMute}
+                    className={`p-2.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 ${
+                      isMuted
+                        ? 'bg-amber-50 border-amber-300 text-amber-800'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                    title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                  >
+                    {isMuted ? <MicOff className="w-4 h-4 text-amber-600" /> : <Mic className="w-4 h-4" />}
+                    <span>{isMuted ? 'Muted' : 'Mute'}</span>
+                  </button>
+
+                  {/* End Call Button */}
+                  <button
+                    type="button"
+                    onClick={handleEndCall}
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs sm:text-sm transition shadow-xs flex items-center gap-1.5"
+                  >
+                    <PhoneOff className="w-4 h-4" />
+                    <span>End Call</span>
+                  </button>
+                </div>
               )}
             </div>
 
-            {/* Clear Conversation Action */}
-            <div className="flex items-center gap-1">
+            {/* Error or Quota Warnings */}
+            {phoneErrorMessage && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{phoneErrorMessage}</span>
+              </div>
+            )}
+            {quotaNotice && (
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>{quotaNotice}</span>
+              </div>
+            )}
+          </form>
+
+          {/* Active Call Audio Waveform (Visible during active call) */}
+          {connectionState === 'CONNECTED' && (
+            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex items-center justify-between animate-in fade-in duration-200">
+              <div className="flex items-center gap-2 text-xs font-semibold text-blue-900">
+                <Radio className="w-4 h-4 text-blue-600 animate-pulse" />
+                <span>Live Audio Connection Active</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {[40, 70, 100, 60, 85, 45, 90].map((h, i) => (
+                  <div
+                    key={i}
+                    className="w-1 bg-blue-600 rounded-full transition-all duration-150"
+                    style={{
+                      height: `${Math.max(6, Math.min(24, h * (audioLevel || 0.4)))}px`,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Live Transcript Container */}
+          <div className="flex-1 flex flex-col min-h-[280px] bg-slate-50/40 border border-slate-200 rounded-xl overflow-hidden">
+            {/* Transcript Toolbar */}
+            <div className="px-4 py-2.5 border-b border-slate-200 bg-white flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                <span>Live Transcript</span>
+                {transcripts.length > 0 && (
+                  <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded-full">
+                    {transcripts.length}
+                  </span>
+                )}
+              </span>
               {transcripts.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleClearConversation}
-                  className="flex items-center gap-1 px-2.5 py-1 text-caption font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
-                  title="Clear conversation"
+                  onClick={handleClearTranscript}
+                  disabled={isCalling}
+                  className="text-caption text-slate-400 hover:text-slate-700 font-semibold transition disabled:opacity-40"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Clear</span>
+                  Clear Transcript
                 </button>
               )}
             </div>
-          </div>
 
-          {/* Test Mode Selector Strip */}
-          <div className="border-b border-slate-100 px-5 py-2.5 bg-slate-50/50 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1 bg-slate-200/60 p-0.5 rounded-lg">
-              <button
-                type="button"
-                onClick={() => setTestMode('voice')}
-                className={`px-3 py-1 rounded-md font-semibold transition ${
-                  testMode === 'voice'
-                    ? 'bg-white text-blue-700 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                🎙️ Voice Test
-              </button>
-              <button
-                type="button"
-                onClick={() => setTestMode('phone')}
-                className={`px-3 py-1 rounded-md font-semibold transition ${
-                  testMode === 'phone'
-                    ? 'bg-white text-blue-700 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                📱 Phone Test
-              </button>
-              <button
-                type="button"
-                onClick={() => setTestMode('chat')}
-                className={`px-3 py-1 rounded-md font-semibold transition ${
-                  testMode === 'chat'
-                    ? 'bg-white text-blue-700 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                💬 Chat Test
-              </button>
-            </div>
-          </div>
-
-          {/* Quota Notice Banner */}
-          {quotaNotice && (
-            <div className="mx-5 mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="font-bold text-amber-950">Sarvam AI Bulbul Voice Notice</div>
-                <div className="text-amber-800 text-caption mt-0.5 leading-relaxed">{quotaNotice}</div>
-              </div>
-              <button
-                onClick={() => setQuotaNotice(null)}
-                className="text-amber-600 hover:text-amber-900 text-xs font-semibold px-1"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          {/* Phone Test Dial Bar (Only if Phone Test mode is selected) */}
-          {testMode === 'phone' && (
-            <div className="p-3.5 bg-blue-50/50 border-b border-blue-100 text-xs space-y-2">
-              <span className="font-semibold text-slate-800 block">Outbound Phone Test</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={phoneTestNumber}
-                  onChange={(e) => setPhoneTestNumber(e.target.value)}
-                  placeholder="Enter Mobile Number (e.g. +91 98765 43210)"
-                  className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono font-medium focus:outline-hidden focus:border-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleDispatchPhoneTest}
-                  disabled={isDispatchingPhone || !phoneTestNumber.trim()}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition disabled:opacity-50"
-                >
-                  {isDispatchingPhone ? 'Dialing...' : 'Dial Phone'}
-                </button>
-              </div>
-              {phoneTestMessage && (
-                <p className="text-caption font-medium text-slate-700">{phoneTestMessage}</p>
-              )}
-            </div>
-          )}
-
-          {/* Audio Waveform Visualizer (When call is active) */}
-          {(connectionState === 'SPEAKING' || connectionState === 'LISTENING') && (
-            <div className="h-10 bg-slate-900 flex items-center justify-center gap-1 px-4">
-              <span className="text-micro font-mono text-slate-400 mr-2">
-                {connectionState === 'SPEAKING' ? `${displayName} Speaking` : 'Listening...'}
-              </span>
-              {[...Array(16)].map((_, i) => {
-                const height = Math.max(
-                  4,
-                  Math.min(24, Math.sin((i / 16) * Math.PI) * (audioLevel * 28) + (i % 2 === 0 ? 5 : 2))
-                );
-                return (
+            {/* Transcript Message Stream */}
+            <div
+              ref={transcriptContainerRef}
+              className="flex-1 p-4 overflow-y-auto space-y-3.5 max-h-[360px]"
+            >
+              {transcripts.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center py-12 text-center text-slate-400 space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                    <Phone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-600 text-xs">No active call</p>
+                    <p className="text-caption text-slate-400 max-w-xs mt-0.5">
+                      Enter a customer mobile number above and click Start Call to test real-time speech and review live transcripts.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                transcripts.map((turn) => (
                   <div
-                    key={i}
-                    style={{ height: `${height}px` }}
-                    className={`w-1 rounded-full transition-all duration-75 ${
-                      connectionState === 'SPEAKING' ? 'bg-purple-400' : 'bg-emerald-400'
+                    key={turn.id}
+                    className={`flex gap-2.5 text-xs ${
+                      turn.role === 'user' ? 'justify-end' : 'justify-start'
                     }`}
-                  />
-                );
-              })}
-            </div>
-          )}
-
-          {/* Conversation Transcript Stream */}
-          <div className="flex-1 p-5 overflow-y-auto space-y-3 bg-slate-50/20 min-h-[300px]">
-            {transcripts.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400 space-y-3">
-                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                  <Mic className="w-6 h-6" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-slate-700">No active conversation</p>
-                  <p className="text-xs text-slate-500 max-w-sm">
-                    Click <span className="font-semibold text-slate-900">Start Voice Call</span> below
-                    or choose Phone / Chat test to speak with{' '}
-                    <strong className="text-slate-800">{displayName}</strong>.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              transcripts.map((t) => {
-                const isUser = t.role === 'user';
-                return (
-                  <div
-                    key={t.id}
-                    className={`flex flex-col ${
-                      isUser ? 'items-end' : 'items-start'
-                    } space-y-1 animate-in fade-in duration-200`}
                   >
+                    {turn.role === 'bot' && (
+                      <div className="w-6 h-6 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">
+                        AI
+                      </div>
+                    )}
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs shadow-2xs leading-relaxed ${
-                        isUser
-                          ? 'bg-slate-900 text-white rounded-br-xs font-medium'
-                          : 'bg-white border border-slate-200 text-slate-800 rounded-bl-xs'
+                      className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-xs shadow-2xs leading-relaxed ${
+                        turn.role === 'user'
+                          ? 'bg-blue-600 text-white rounded-tr-none'
+                          : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                       }`}
                     >
-                      <p>{t.content}</p>
-                      {t.interrupted && (
-                        <span className="inline-block mt-1 text-micro font-bold text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded">
-                          ⚡ Interrupted by user
+                      <div className="flex items-center justify-between gap-3 text-[10px] mb-1 opacity-70">
+                        <span className="font-bold">
+                          {turn.role === 'user' ? 'Customer' : editName || 'Agent'}
                         </span>
-                      )}
+                        <span>{turn.timestamp}</span>
+                      </div>
+                      <p>{turn.content}</p>
                     </div>
-                    <span className="text-micro text-slate-400 px-1 font-mono">{t.timestamp}</span>
+                    {turn.role === 'user' && (
+                      <div className="w-6 h-6 rounded-md bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">
+                        <User className="w-3.5 h-3.5" />
+                      </div>
+                    )}
                   </div>
-                );
-              })
-            )}
-            <div ref={transcriptEndRef} />
+                ))
+              )}
+              <div ref={transcriptEndRef} />
+            </div>
           </div>
 
-          {/* Chat Input Form (When in Chat Test mode) */}
-          {testMode === 'chat' && (
-            <form onSubmit={handleSendChat} className="p-3 border-t border-slate-200 bg-white flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type your message here..."
-                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500"
-              />
-              <button
-                type="submit"
-                disabled={isSendingChat || !chatInput.trim()}
-                className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send</span>
-              </button>
-            </form>
-          )}
-
-          {/* Testing Action Bar */}
-          <div className="p-4 border-t border-slate-200 bg-white space-y-2.5">
-            {connectionState === 'IDLE' || connectionState === 'ENDED' ? (
+          {/* =================================================================== */}
+          {/* PREVIOUS CALL HISTORY SECTION                                      */}
+          {/* =================================================================== */}
+          <div className="border-t border-slate-100 pt-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-slate-600" />
+                <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                  Previous Call History
+                </h4>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  {testHistory.length}
+                </span>
+              </div>
               <button
                 type="button"
-                onClick={handleStartVoiceTest}
-                className="w-full py-3 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition flex items-center justify-center gap-2"
+                onClick={loadTestHistory}
+                disabled={isLoadingHistory}
+                className="text-caption text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 transition"
               >
-                <Mic className="w-4 h-4" />
-                <span>Start Voice Call</span>
+                <RotateCcw className={`w-3 h-3 ${isLoadingHistory ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
               </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleToggleMute}
-                  className={`p-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                    isMuted
-                      ? 'bg-amber-50 border-amber-300 text-amber-700'
-                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                  }`}
-                  title={isMuted ? 'Unmute Microphone' : 'Mute Microphone'}
-                >
-                  {isMuted ? <MicOff className="w-4 h-4 text-amber-600" /> : <Mic className="w-4 h-4" />}
-                  <span>{isMuted ? 'Muted' : 'Mute'}</span>
-                </button>
+            </div>
 
-                <button
-                  type="button"
-                  onClick={handleEndVoiceTest}
-                  className="flex-1 py-3 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm transition flex items-center justify-center gap-2"
-                >
-                  <PhoneOff className="w-4 h-4" />
-                  <span>End Call</span>
-                </button>
+            {testHistory.length === 0 ? (
+              <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-xl text-center text-xs text-slate-400">
+                No past test calls recorded yet. Dispatched calls will appear here.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                {testHistory.slice(0, 10).map((item) => {
+                  const isExpanded = expandedHistoryId === item.id;
+                  const itemPhone =
+                    item.recipientNumber ||
+                    item.customerNumber ||
+                    item.outputVariables?.customerPhone ||
+                    item.scenario?.replace('Outbound Phone Call to ', '') ||
+                    'Customer Phone';
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="border border-slate-200 rounded-lg p-3 bg-white hover:border-slate-300 transition text-xs space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="font-bold text-slate-900">{itemPhone}</span>
+                          <span
+                            className={`text-micro font-bold px-2 py-0.5 rounded uppercase ${
+                              item.disposition === 'COMPLETED'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : item.disposition === 'FAILED'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            }`}
+                          >
+                            {item.disposition || 'Initiated'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-caption text-slate-500">
+                          {item.durationSeconds > 0 && (
+                            <span className="font-mono font-medium">
+                              {formatDuration(item.durationSeconds)}
+                            </span>
+                          )}
+                          <span>
+                            {new Date(item.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedHistoryId(isExpanded ? null : item.id)}
+                            className="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-0.5 ml-1"
+                          >
+                            <span>{isExpanded ? 'Hide' : 'Transcript'}</span>
+                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expandable Transcript Turns */}
+                      {isExpanded && (
+                        <div className="pt-2 border-t border-slate-100 space-y-1.5 bg-slate-50/50 p-2.5 rounded-md animate-in fade-in duration-150">
+                          {item.transcript && item.transcript.length > 0 ? (
+                            item.transcript.map((t: any, idx: number) => (
+                              <div key={idx} className="text-caption leading-relaxed flex items-start gap-1.5">
+                                <span className="font-bold text-slate-700 uppercase shrink-0">
+                                  {t.role === 'bot' ? 'Agent:' : 'Customer:'}
+                                </span>
+                                <span className="text-slate-600">{t.content}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-caption text-slate-400 italic">
+                              No transcript recorded for this session.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* ============================================================== */}
-      {/* 3. MODALS & DRAWERS                                            */}
-      {/* ============================================================== */}
-
-      {/* MODAL: Comprehensive AI Voice Agent Configuration (Gemini-Powered & Provider-Driven) */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-blue-100/70 text-blue-700">
-                  <Bot className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-slate-900 text-sm">Configure AI Voice Agent</h3>
-                    <span
-                      className={`text-micro font-bold px-2 py-0.5 rounded-full uppercase ${
-                        agentConfig?.status === 'APPROVED' || agentConfig?.status === 'PUBLISHED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      v{agentConfig?.version || 1} • {agentConfig?.status || 'DRAFT'}
-                    </span>
-                  </div>
-                  <p className="text-caption text-slate-500 mt-0.5">
-                    Customize what your AI speaks, language, voice model, and greetings.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowGuidanceInput(!showGuidanceInput)}
-                  disabled={isRegenerating}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition shadow-2xs disabled:opacity-50"
-                  title="Generate persona, greeting, and instructions with Gemini"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                  <span>{isRegenerating ? 'Generating...' : 'Regenerate with Gemini'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Optional Guidance Drawer for Gemini Regeneration */}
-            {showGuidanceInput && (
-              <div className="bg-purple-50/70 border-b border-purple-200 p-4 space-y-2.5 animate-in slide-in-from-top-2 duration-150">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-purple-950 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                    Custom Instructions for Gemini Regeneration
-                  </span>
-                  <span className="text-caption text-purple-700">Optional</span>
-                </div>
-                <input
-                  type="text"
-                  value={guidanceText}
-                  onChange={(e) => setGuidanceText(e.target.value)}
-                  placeholder="e.g. Focus on qualifying executive decision-makers, emphasize weekend appointments, etc."
-                  className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-purple-500 font-medium text-slate-800"
-                />
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowGuidanceInput(false)}
-                    className="px-2.5 py-1 text-caption text-purple-700 hover:text-purple-950 font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateWithGemini}
-                    disabled={isRegenerating}
-                    className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-caption font-bold transition disabled:opacity-50 flex items-center gap-1"
-                  >
-                    {isRegenerating ? 'Analyzing & Generating...' : 'Run Gemini Generation'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Outdated Configuration Alert Banner */}
-            {agentConfig?.isOutdated && (
-              <div className="mx-6 mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <span className="font-bold block">Organization Profile Updated</span>
-                  <p className="text-caption text-amber-800 mt-0.5">
-                    {agentConfig.outdatedReason ||
-                      'Company profile or service catalog was modified. You can review your instructions or regenerate a new draft with Gemini.'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRegenerateWithGemini}
-                  disabled={isRegenerating}
-                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-caption transition disabled:opacity-50 whitespace-nowrap"
-                >
-                  Regenerate Now
-                </button>
-              </div>
-            )}
-
-            {/* Missing Information Alert Box */}
-            {agentConfig?.missingInformation && agentConfig.missingInformation.length > 0 && (
-              <div className="mx-6 mt-4 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs space-y-1.5">
-                <div className="font-bold flex items-center gap-1.5 text-blue-950">
-                  <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Missing Organization Context Detected</span>
-                </div>
-                <ul className="list-disc list-inside text-caption text-blue-800 space-y-0.5 pl-1">
-                  {agentConfig.missingInformation.map((item, idx) => (
-                    <li key={idx}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveConfig} className="p-6 space-y-5 text-xs max-h-[72vh] overflow-y-auto">
-              {/* Section 1: Agent Identity */}
-              <div>
-                <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400 mb-2.5">
-                  1. Agent Identity
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-800 block">Agent Name *</label>
-                    <input
-                      type="text"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      placeholder="e.g. Aditi, Rohan, Ananya"
-                      required
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500 font-medium"
-                    />
-                    <p className="text-caption text-slate-400">Persona name used in voice introductions.</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-800 block">Role / Designation *</label>
-                    <input
-                      type="text"
-                      value={editRole}
-                      onChange={(e) => setEditRole(e.target.value)}
-                      placeholder="e.g. Senior Customer Advisor, Solutions Specialist"
-                      required
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500 font-medium"
-                    />
-                    <p className="text-caption text-slate-400">Professional job title representing your brand.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 2: Voice & Language Settings (Provider API Driven) */}
-              <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400">
-                    2. Voice & Language Settings
-                  </h4>
-                  {isLoadingCapabilities && (
-                    <span className="text-caption text-slate-400 italic">Loading voice capabilities...</span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-800 block">Language</label>
-                    <select
-                      value={editLanguage}
-                      onChange={(e) => setEditLanguage(e.target.value)}
-                      disabled={isLoadingCapabilities}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500 bg-white font-medium disabled:bg-slate-100"
-                    >
-                      {capabilities?.languages && capabilities.languages.length > 0 ? (
-                        capabilities.languages.map((l) => (
-                          <option key={l.id} value={l.id}>
-                            {l.name} ({l.nativeName})
-                          </option>
-                        ))
-                      ) : (
-                        <option value={editLanguage}>
-                          {isLoadingCapabilities ? 'Loading supported languages...' : getLanguageLabel(editLanguage)}
-                        </option>
-                      )}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-800 block">AI Voice</label>
-                    <select
-                      value={editSpeaker}
-                      onChange={(e) => setEditSpeaker(e.target.value)}
-                      disabled={isLoadingCapabilities}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500 bg-white font-medium disabled:bg-slate-100"
-                    >
-                      {capabilities?.voices && capabilities.voices.length > 0 ? (
-                        capabilities.voices.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.name} ({v.gender === 'female' ? 'Female' : 'Male'}{v.description ? ` - ${v.description}` : ''})
-                          </option>
-                        ))
-                      ) : (
-                        <option value={editSpeaker}>
-                          {isLoadingCapabilities ? 'Loading voice options...' : editSpeaker.toUpperCase()}
-                        </option>
-                      )}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-800 block">Voice Engine Model</label>
-                    <select
-                      value={editModel}
-                      onChange={(e) => setEditModel(e.target.value)}
-                      disabled={isLoadingCapabilities}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500 bg-white font-medium disabled:bg-slate-100"
-                    >
-                      {capabilities?.models && capabilities.models.length > 0 ? (
-                        capabilities.models.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} {m.description ? `(${m.description})` : ''}
-                          </option>
-                        ))
-                      ) : (
-                        <option value={editModel}>
-                          {isLoadingCapabilities ? 'Loading engine models...' : editModel}
-                        </option>
-                      )}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Conversation Script & Instructions */}
-              <div>
-                <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400 mb-2.5">
-                  3. Conversation Script & Instructions
-                </h4>
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-800 block">
-                      Opening Greeting
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={editGreeting}
-                      onChange={(e) => setEditGreeting(e.target.value)}
-                      placeholder="e.g. Hello! This is your advisor from our team. How may I help you today?"
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500 font-medium leading-relaxed"
-                    />
-                    <p className="text-caption text-slate-500">
-                      The agent speaks this message immediately when a test or outbound telephony call connects.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-800 block">
-                      Agent Instructions & Conversation Objectives
-                    </label>
-                    <textarea
-                      rows={5}
-                      value={editInstructions}
-                      onChange={(e) => setEditInstructions(e.target.value)}
-                      placeholder="Defines conversation objectives, qualification criteria, guidelines, and guardrails."
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden focus:border-blue-500 font-mono text-[11px] leading-relaxed"
-                    />
-                    <p className="text-caption text-slate-500">
-                      Defines the conversation script, persona, rules, and qualification criteria for your AI agent.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Footer: Save Draft & Approve Actions */}
-              <div className="pt-4 flex items-center justify-between gap-2.5 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-100 transition"
-                >
-                  Cancel
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="submit"
-                    disabled={isSavingConfig || !editName.trim()}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition disabled:opacity-50"
-                  >
-                    {isSavingConfig ? 'Saving Draft...' : 'Save Draft'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleApproveConfig}
-                    disabled={isApproving || isSavingConfig || !editName.trim()}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition shadow-xs disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {isApproving ? (
-                      <span>Approving...</span>
-                    ) : (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Approve & Publish Agent</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* DRAWER: Test Call History */}
-      {isHistoryDrawerOpen && (
-        <div className="fixed inset-y-0 right-0 w-96 bg-white border-l border-slate-200 shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-slate-600" />
-              <h4 className="font-bold text-slate-900 text-sm">Past Test Sessions</h4>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsHistoryDrawerOpen(false)}
-              className="p-1 text-slate-400 hover:text-slate-700 rounded-md"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {testHistory.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-xs space-y-1">
-                <p className="font-semibold text-slate-600">No test history recorded yet</p>
-                <p>Run a voice or phone test to view transcripts and session details here.</p>
-              </div>
-            ) : (
-              testHistory.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 transition space-y-2 bg-white"
-                >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800">{item.serviceName || companyName}</span>
-                    <span className="text-micro text-slate-400 font-mono">
-                      {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-caption text-slate-500">
-                    <span>
-                      Mode: <strong className="text-slate-700 uppercase">{item.mode}</strong>
-                    </span>
-                    <span>
-                      Duration: <strong className="text-slate-700">{item.durationSeconds}s</strong>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-caption pt-1.5 border-t border-slate-100">
-                    <span className="text-emerald-600 font-semibold">{item.disposition || 'Completed'}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (item.transcript) setTranscripts(item.transcript);
-                        setIsHistoryDrawerOpen(false);
-                      }}
-                      className="text-blue-600 hover:underline font-bold text-caption"
-                    >
-                      Load Transcript
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

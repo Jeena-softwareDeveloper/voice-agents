@@ -46,6 +46,38 @@ export interface Tenant {
   };
 }
 
+export interface ServiceMarketingMaterial {
+  id: string;
+  tenantId: string;
+  serviceId: string;
+  fileName: string;
+  fileType: string;
+  fileSize?: number;
+  fileUrl?: string;
+  rawContent?: string;
+  extractedData?: any;
+  createdAt: string;
+}
+
+export interface ServiceFollowUpStage {
+  id: string;
+  tenantId: string;
+  serviceId: string;
+  order: number;
+  name: string;
+  triggerTiming: string;
+  questions: any[];
+  expectedResponse?: string;
+  nextAction: string;
+  callbackScheduling: boolean;
+  meetingScheduling: boolean;
+  retryLimit: number;
+  stopConditions?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Service {
   id: string;
   tenantId: string;
@@ -53,10 +85,15 @@ export interface Service {
   category: string;
   description: string;
   location?: string;
+  marketLocation?: string;
   pricingInfo?: string;
+  additionalInfo?: string;
+  extractedInfo?: any;
   approvalStatus: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   isActive: boolean;
   serviceAiConfig?: ServiceAiConfig;
+  marketingMaterials?: ServiceMarketingMaterial[];
+  followUpStages?: ServiceFollowUpStage[];
   _count?: {
     leads: number;
     calls: number;
@@ -75,6 +112,8 @@ export interface ServiceAiConfig {
   qualificationQuestions: any[];
   approvedResponses: Record<string, string>;
   objectionHandling: Record<string, string>;
+  talkingPoints?: string[];
+  faqs?: Array<{ question: string; answer: string }>;
   language: string;
   voice: string;
   maxDurationSeconds: number;
@@ -142,6 +181,17 @@ export interface FollowUp {
   tenantId: string;
   leadId?: string;
   contactId: string;
+  serviceId?: string;
+  stageId?: string;
+  currentStage?: string;
+  meetingStatus?: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NOT_APPLICABLE' | string;
+  assignedOwner?: string;
+  callHistory?: Array<{
+    date: string;
+    duration: string;
+    outcome: string;
+    summary?: string;
+  }>;
   title: string;
   description?: string;
   type: 'CALLBACK' | 'DEMO' | 'SITE_VISIT' | 'SALES_CALL' | 'GENERAL';
@@ -150,7 +200,13 @@ export interface FollowUp {
   status: 'PENDING' | 'COMPLETED' | 'OVERDUE' | 'CANCELLED';
   outcomeNotes?: string;
   contact: Contact;
-  lead?: { service: { name: string } };
+  service?: { id: string; name: string; category?: string };
+  stage?: { id: string; name: string; order?: number };
+  lead?: {
+    id?: string;
+    service?: { name: string };
+    calls?: Call[];
+  };
 }
 
 export interface Customer {
@@ -190,19 +246,87 @@ export interface Invoice {
 
 export interface TelephonyNumber {
   id: string;
-  number: string;
-  country: string;
+  e164Number: string;
+  number?: string;
+  countryCode: string;
+  countryName: string;
+  country?: string;
+  callingCode: string;
   region: string;
-  type: 'DID_LOCAL' | 'TOLL_FREE' | 'MOBILE_VIRTUAL';
+  numberType: string;
+  type?: string;
   provider: string;
   monthlyRent: number;
-  status: 'AVAILABLE' | 'ASSIGNED' | 'PENDING_KYC' | 'RESERVED';
+  currency: string;
+  status: string;
+  providerStatus: string;
   assignedTenantId?: string | null;
   renewalDate: string;
-  kycStatus: 'VERIFIED' | 'PENDING' | 'REJECTED';
+  kycStatus: string;
   isByot: boolean;
   active: boolean;
-  allocatedAt?: string;
+  allocatedAt?: string | null;
+  assignedAgentId?: string | null;
+  assignedServiceName?: string | null;
+  connectionId?: string | null;
+  connectionName?: string | null;
+  lastSynchronizedAt?: string;
+}
+
+export interface TelephonyConnection {
+  id: string;
+  name: string;
+  providerType: 'SARVAM_MANAGED' | 'BYOT_SIP_TRUNK' | 'BYOT_CARRIER';
+  providerName: string;
+  status: string;
+  isVerified: boolean;
+  config?: any;
+  lastVerifiedAt?: string | null;
+  lastSyncAt?: string | null;
+  phoneNumbersCount: number;
+  createdAt: string;
+}
+
+export interface NumberCatalogItem {
+  providerNumberId: string;
+  e164Number: string;
+  countryCode: string;
+  countryName: string;
+  callingCode: string;
+  region?: string;
+  numberType: 'LOCAL' | 'TOLL_FREE' | 'MOBILE' | 'NATIONAL';
+  monthlyRent?: number;
+  currency?: string;
+  billingPeriod?: 'MONTHLY' | 'ANNUAL';
+  features?: string[];
+  kycRequired?: boolean;
+}
+
+export interface NumberCatalogResult {
+  isSupported: boolean;
+  status: 'SUPPORTED' | 'UNSUPPORTED_BY_PROVIDER' | 'ERROR';
+  message?: string;
+  items: NumberCatalogItem[];
+  availableCountries?: Array<{ code: string; name: string; callingCode: string }>;
+  availableTypes?: string[];
+  total: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface RegisterByotPayload {
+  e164Number: string;
+  connectionName?: string;
+  carrierName?: string;
+  sipTrunkHost?: string;
+  accountSid?: string;
+  authToken?: string;
+  region?: string;
+  businessKyc?: {
+    authorizedSignatoryName?: string;
+    businessRegistrationNumber?: string;
+    address?: string;
+  };
 }
 
 export interface PronunciationEntry {

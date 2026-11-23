@@ -85,15 +85,13 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({ onOpenTour }) => {
     };
   }, [isOpen]);
 
-  // Strictly 8 client menus
+  // Strictly 6 client menus
   const navItems = [
     { label: 'Dashboard', href: '/workspace/dashboard', icon: LayoutDashboard },
-    { label: 'Calls & Leads', href: '/workspace/calls', icon: PhoneCall },
+    { label: 'Calls', href: '/workspace/calls', icon: PhoneCall },
     { label: 'Services', href: '/workspace/services', icon: Layers },
     { label: 'Configuration', href: '/workspace/ai-calling', icon: SlidersHorizontal },
-    { label: 'Sales Pipeline', href: '/workspace/sales-pipeline', icon: GitBranch },
     { label: 'Follow-ups', href: '/workspace/follow-ups', icon: CalendarCheck },
-    { label: 'Customers', href: '/workspace/customers', icon: Users },
     { label: 'Reports', href: '/workspace/reports', icon: BarChart3 },
   ];
 

@@ -29,6 +29,26 @@ export class CreateFollowUpDto {
   @IsNotEmpty()
   @IsDateString()
   dueDate: string;
+
+  @IsOptional()
+  @IsString()
+  serviceId?: string;
+
+  @IsOptional()
+  @IsString()
+  stageId?: string;
+
+  @IsOptional()
+  @IsString()
+  currentStage?: string;
+
+  @IsOptional()
+  @IsString()
+  meetingStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  assignedOwner?: string;
 }
 
 export class UpdateFollowUpDto {
@@ -39,4 +59,20 @@ export class UpdateFollowUpDto {
   @IsOptional()
   @IsString()
   outcomeNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  meetingStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  currentStage?: string;
+
+  @IsOptional()
+  @IsString()
+  assignedOwner?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
 }

@@ -379,21 +379,219 @@ async function main() {
     },
   });
 
-  // Follow-up
+  // Villa Service Follow-up Stages
+  const villaStages = [
+    {
+      order: 1,
+      name: 'Initial Contact',
+      triggerTiming: 'Immediate after lead intake',
+      questions: ['Confirm interest in 4 BHK luxury villa in Hinjawadi', 'Check if planning self-occupancy or investment'],
+      expectedResponse: 'Customer confirms interest in Hinjawadi luxury villa project.',
+      nextAction: 'Dispatch WhatsApp brochure & schedule Requirement Collection',
+      callbackScheduling: true,
+      meetingScheduling: false,
+      retryLimit: 3,
+      stopConditions: 'Not interested / DND requested',
+    },
+    {
+      order: 2,
+      name: 'Requirement Collection',
+      triggerTiming: 'Day 1 (24 hours after Initial Contact)',
+      questions: ['Understand preferred carpet area (3200 vs 4000 sq.ft)', 'Confirm garden layout & parking requirements'],
+      expectedResponse: 'Customer confirms preferred configuration and budget of 1.8 Cr - 2.5 Cr.',
+      nextAction: 'Propose curated weekend site visit with property manager',
+      callbackScheduling: true,
+      meetingScheduling: false,
+      retryLimit: 3,
+      stopConditions: 'Budget mismatch or postponed purchase',
+    },
+    {
+      order: 3,
+      name: 'Site Visit Scheduling',
+      triggerTiming: 'Day 2 (Pre-Weekend Invitation)',
+      questions: ['Invite customer to model villa tour on Saturday or Sunday 11 AM', 'Confirm if family members will accompany'],
+      expectedResponse: 'Confirmed date, time slot, and guest count.',
+      nextAction: 'Confirm Site Visit booking, send GPS coordinates & notify host',
+      callbackScheduling: true,
+      meetingScheduling: true,
+      retryLimit: 2,
+      stopConditions: 'Customer declines physical visit; offer video tour',
+    },
+    {
+      order: 4,
+      name: 'Post-Visit Follow-up',
+      triggerTiming: 'Day 4 (24 hours post site visit)',
+      questions: ['Review feedback on model villa & construction quality', 'Present customized payment milestone schedule'],
+      expectedResponse: 'Customer selects Villa Unit #14 and requests final cost sheet.',
+      nextAction: 'Send formal quotation and coordinate final negotiation meeting',
+      callbackScheduling: true,
+      meetingScheduling: true,
+      retryLimit: 3,
+      stopConditions: 'Customer decides on alternative developer',
+    },
+    {
+      order: 5,
+      name: 'Final Decision & Booking',
+      triggerTiming: 'Day 7 (Post quotation review)',
+      questions: ['Review bank loan approval status & booking token agreement'],
+      expectedResponse: 'Booking token payment received and agreement signed.',
+      nextAction: 'Convert lead to active customer & issue formal receipt',
+      callbackScheduling: true,
+      meetingScheduling: false,
+      retryLimit: 2,
+      stopConditions: 'Deal Won or Lost',
+    },
+  ];
+
+  await prisma.serviceFollowUpStage.deleteMany({
+    where: { serviceId: villaService.id },
+  });
+
+  for (const stg of villaStages) {
+    await prisma.serviceFollowUpStage.create({
+      data: {
+        tenantId: tenant1.id,
+        serviceId: villaService.id,
+        order: stg.order,
+        name: stg.name,
+        triggerTiming: stg.triggerTiming,
+        questions: stg.questions,
+        expectedResponse: stg.expectedResponse,
+        nextAction: stg.nextAction,
+        callbackScheduling: stg.callbackScheduling,
+        meetingScheduling: stg.meetingScheduling,
+        retryLimit: stg.retryLimit,
+        stopConditions: stg.stopConditions,
+      },
+    });
+  }
+
+  // Follow-up records for Today, Upcoming, Overdue, and Completed
+  const now = new Date();
+
+  // 1. Overdue Follow-up
+  await prisma.followUp.upsert({
+    where: { id: 'followup-rohit-overdue' },
+    update: {},
+    create: {
+      id: 'followup-rohit-overdue',
+      tenantId: tenant1.id,
+      contactId: contact1.id,
+      leadId: lead1.id,
+      serviceId: villaService.id,
+      currentStage: 'Requirement Collection',
+      title: 'Discuss 4 BHK Villa Carpet Area - Rohit Deshmukh',
+      description: 'Review floor plan options and verify required possession timeline before site visit.',
+      type: 'CALLBACK',
+      priority: 'HIGH',
+      dueDate: new Date(now.getTime() - 2 * 24 * 3600 * 1000), // 2 days ago (Overdue)
+      status: 'OVERDUE',
+      meetingStatus: 'NOT_APPLICABLE',
+      assignedOwner: 'AI Voice Assistant (Simran)',
+      callHistory: [
+        {
+          date: new Date(now.getTime() - 3 * 24 * 3600 * 1000).toISOString(),
+          duration: '1m 45s',
+          outcome: 'Interested',
+          summary: 'Customer requested floor plans for 3500 sq.ft villa.',
+        },
+      ],
+    },
+  });
+
+  // 2. Today's Follow-up
+  await prisma.followUp.upsert({
+    where: { id: 'followup-priya-today' },
+    update: {},
+    create: {
+      id: 'followup-priya-today',
+      tenantId: tenant1.id,
+      contactId: contact2.id,
+      leadId: lead2.id,
+      serviceId: villaService.id,
+      currentStage: 'Site Visit Scheduling',
+      title: 'Confirm Saturday Model Villa Visit - Priya Sharma',
+      description: 'Confirm 11:30 AM arrival at Hinjawadi Phase 3 site office and send gate entry pass.',
+      type: 'SITE_VISIT',
+      priority: 'URGENT',
+      dueDate: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 30), // Today at 2:30 PM
+      status: 'PENDING',
+      meetingStatus: 'SCHEDULED',
+      assignedOwner: 'Senior Property Consultant',
+      callHistory: [
+        {
+          date: new Date(now.getTime() - 24 * 3600 * 1000).toISOString(),
+          duration: '2m 10s',
+          outcome: 'Meeting Scheduled',
+          summary: 'Confirmed Saturday visit with family.',
+        },
+      ],
+    },
+  });
+
+  // 3. Upcoming Follow-up
   await prisma.followUp.upsert({
     where: { id: 'followup-arun-sitevisit' },
-    update: {},
+    update: {
+      serviceId: villaService.id,
+      currentStage: 'Post-Visit Follow-up',
+      meetingStatus: 'SCHEDULED',
+      assignedOwner: 'Relationship Manager (Rohan)',
+    },
     create: {
       id: 'followup-arun-sitevisit',
       tenantId: tenant1.id,
       contactId: contact1.id,
       leadId: lead1.id,
-      title: 'Saturday Site Visit - Arun Kulkarni',
-      description: 'Host Arun Kulkarni at Wagholi site office at 11:00 AM for plot layout review.',
+      serviceId: villaService.id,
+      currentStage: 'Post-Visit Follow-up',
+      title: 'Post-Visit Villa Layout Review - Arun Kulkarni',
+      description: 'Host Arun Kulkarni at Hinjawadi Phase 3 site office for customized payment schedule review.',
       type: 'SITE_VISIT',
       priority: 'HIGH',
-      dueDate: new Date(Date.now() + 2 * 24 * 3600 * 1000),
+      dueDate: new Date(now.getTime() + 2 * 24 * 3600 * 1000), // Upcoming in 2 days
       status: 'PENDING',
+      meetingStatus: 'SCHEDULED',
+      assignedOwner: 'Relationship Manager (Rohan)',
+      callHistory: [
+        {
+          date: new Date(now.getTime() - 3600 * 1000 * 24).toISOString(),
+          duration: '2m 25s',
+          outcome: 'Qualified',
+          summary: 'Arun confirmed 2 Cr budget for 4 BHK villa with garden.',
+        },
+      ],
+    },
+  });
+
+  // 4. Completed Follow-up
+  await prisma.followUp.upsert({
+    where: { id: 'followup-vikram-completed' },
+    update: {},
+    create: {
+      id: 'followup-vikram-completed',
+      tenantId: tenant1.id,
+      contactId: contact1.id,
+      leadId: lead1.id,
+      serviceId: villaService.id,
+      currentStage: 'Final Decision & Booking',
+      title: 'Booking Token Documentation - Vikram Malhotra',
+      description: 'Cheque collected for Villa #12 token booking. Handed over draft sale agreement.',
+      type: 'SALES_CALL',
+      priority: 'MEDIUM',
+      dueDate: new Date(now.getTime() - 4 * 24 * 3600 * 1000),
+      status: 'COMPLETED',
+      meetingStatus: 'COMPLETED',
+      assignedOwner: 'Sales Director',
+      outcomeNotes: 'Token of Rs. 10 Lakhs received. Booking receipt generated.',
+      callHistory: [
+        {
+          date: new Date(now.getTime() - 5 * 24 * 3600 * 1000).toISOString(),
+          duration: '3m 12s',
+          outcome: 'Won',
+          summary: 'Negotiation completed with 2% launch concession approved.',
+        },
+      ],
     },
   });
 

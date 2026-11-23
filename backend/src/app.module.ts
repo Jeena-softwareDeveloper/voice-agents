@@ -11,6 +11,8 @@ import { JwtStrategy } from './services/auth/jwt.strategy';
 // Integrations
 import { SarvamService } from './integrations/sarvam/sarvam.service';
 import { TelephonyService } from './integrations/telephony/telephony.service';
+import { SarvamTelephonyAdapter } from './integrations/telephony/adapters/sarvam-telephony.adapter';
+import { ByotTelephonyAdapter } from './integrations/telephony/adapters/byot-telephony.adapter';
 import { EmailService } from './integrations/email/email.service';
 import { PaymentGatewayService } from './integrations/payments/payment-gateway.service';
 import { GeminiService } from './integrations/gemini/gemini.service';
@@ -33,6 +35,7 @@ import { CustomersService } from './services/customers/customers.service';
 import { ReportsService } from './services/reports/reports.service';
 import { PaymentsService } from './services/payments/payments.service';
 import { SettingsService } from './services/settings/settings.service';
+import { IntegrationsService } from './integrations/integrations.service';
 
 // Controllers
 import { AuthController } from './controllers/auth/auth.controller';
@@ -52,6 +55,7 @@ import { CustomersController } from './controllers/customers/customers.controlle
 import { ReportsController } from './controllers/reports/reports.controller';
 import { PaymentsController } from './controllers/payments/payments.controller';
 import { SettingsController } from './controllers/settings/settings.controller';
+import { IntegrationsController } from './controllers/integrations/integrations.controller';
 
 @Module({
   imports: [
@@ -85,15 +89,19 @@ import { SettingsController } from './controllers/settings/settings.controller';
     ReportsController,
     PaymentsController,
     SettingsController,
+    IntegrationsController,
   ],
   providers: [
     TenantValidator,
     JwtStrategy,
     SarvamService,
+    SarvamTelephonyAdapter,
+    ByotTelephonyAdapter,
     TelephonyService,
     EmailService,
     PaymentGatewayService,
     GeminiService,
+    IntegrationsService,
     AuthService,
     TenantsService,
     BusinessOnboardingService,

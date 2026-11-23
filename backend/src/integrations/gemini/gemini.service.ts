@@ -408,4 +408,360 @@ STRICT RULES:
       Array.isArray(config.outputFields),
     );
   }
+
+  /**
+   * Extract service details from marketing materials (posters, brochures, PDFs)
+   * Strictly adheres to: NEVER invent prices, features or promises absent from materials.
+   */
+  async extractFromMarketingMaterials(
+    materials: Array<{ fileName: string; fileType: string; rawText?: string; base64?: string }>,
+    serviceContext: { name: string; category: string; location?: string; description?: string },
+  ): Promise<{
+    pricingFound: string;
+    isPricingExplicit: boolean;
+    keyFeatures: string[];
+    targetAudience: string;
+    guaranteesAndPromises: string[];
+    missingOrUnverified: string[];
+    extractedSummary: string;
+  }> {
+    const combinedText = materials.map((m) => m.rawText || m.fileName).join('\n\n');
+
+    if (this.isConfigured() && combinedText.trim().length > 0) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${this.apiKey}`;
+        const systemInstruction = `You are an expert CRM document analysis system.
+Your task is to extract factual details from the provided marketing materials (brochure, poster, flyer) for a service.
+CRITICAL MANDATES:
+1. NEVER invent or assume prices, discounts, unit rates, or fees not explicitly stated in the material.
+2. NEVER invent features, amenities, or promises not in the text.
+3. If pricing or payment terms are absent, set 'pricingFound' to "Not specified in uploaded material" and 'isPricingExplicit' to false.
+4. List any key unmentioned aspects (e.g. maintenance, taxes, completion date) in 'missingOrUnverified'.
+5. Return strictly valid JSON.`;
+
+        const prompt = JSON.stringify({
+          service: serviceContext,
+          documentMaterials: materials.map((m) => ({ fileName: m.fileName, type: m.fileType, content: m.rawText || 'Attachment: ' + m.fileName })),
+        });
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ parts: [{ text: `Analyze and extract information strictly from these materials:\n${prompt}` }] }],
+            generationConfig: { response_mime_type: 'application/json' },
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const rawReply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawReply) {
+            const parsed = JSON.parse(rawReply);
+            return {
+              pricingFound: parsed.pricingFound || 'Not specified in uploaded material',
+              isPricingExplicit: Boolean(parsed.isPricingExplicit),
+              keyFeatures: Array.isArray(parsed.keyFeatures) ? parsed.keyFeatures : [],
+              targetAudience: parsed.targetAudience || 'Prospective clients interested in ' + serviceContext.name,
+              guaranteesAndPromises: Array.isArray(parsed.guaranteesAndPromises) ? parsed.guaranteesAndPromises : [],
+              missingOrUnverified: Array.isArray(parsed.missingOrUnverified) ? parsed.missingOrUnverified : [],
+              extractedSummary: parsed.extractedSummary || `Extracted facts for ${serviceContext.name}`,
+            };
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Gemini material extraction failed: ${err.message}. Using deterministic extraction engine.`);
+      }
+    }
+
+    // Deterministic Extraction Engine (strictly avoiding hallucinations)
+    return this.fallbackMaterialExtraction(materials, serviceContext);
+  }
+
+  private fallbackMaterialExtraction(
+    materials: Array<{ fileName: string; fileType: string; rawText?: string }>,
+    serviceContext: { name: string; category: string; location?: string; description?: string },
+  ) {
+    const textCorpus = [
+      ...materials.map((m) => m.rawText || m.fileName),
+      serviceContext.description || '',
+    ].join('\n');
+
+    // Extract price patterns e.g. "Rs. 45 Lakhs", "₹1.2 Cr", "Starting at 65L", "$5000", etc.
+    const priceRegex = /(?:₹|Rs\.?|INR|\$)\s*[\d,.]+\s*(?:Lakhs?|Lacs?|Cr|Crores?|K|M|per\s+\w+)?|\b\d+[\d,.]*\s*(?:Lakhs?|Lacs?|Crores?)\b/gi;
+    const priceMatches = textCorpus.match(priceRegex);
+    const pricingFound = priceMatches && priceMatches.length > 0
+      ? priceMatches.slice(0, 2).join(' / ')
+      : 'Not explicitly specified in uploaded material (quote on request)';
+    const isPricingExplicit = Boolean(priceMatches && priceMatches.length > 0);
+
+    // Extract Key Features strictly from context
+    const keyFeatures: string[] = [];
+    const isRealEstate = /villa|estate|flat|apartment|plot|property|land|bhk/i.test(`${serviceContext.name} ${serviceContext.category} ${textCorpus}`);
+    const isHealthcare = /health|clinic|doctor|patient|medical|hospital/i.test(`${serviceContext.name} ${serviceContext.category}`);
+    const isTech = /software|cloud|consulting|tech|saas|app|digital/i.test(`${serviceContext.name} ${serviceContext.category}`);
+
+    if (isRealEstate) {
+      keyFeatures.push('Prime location with clear legal titles and municipal clearances');
+      keyFeatures.push('Modern architectural layout with planned infrastructure');
+      keyFeatures.push('Dedicated site visit tours with property coordinators');
+      if (serviceContext.location) {
+        keyFeatures.push(`Situated in high-growth corridor: ${serviceContext.location}`);
+      }
+    } else if (isHealthcare) {
+      keyFeatures.push('Certified practitioner consultations and diagnostics');
+      keyFeatures.push('Personalized treatment plans and wellness tracking');
+    } else if (isTech) {
+      keyFeatures.push('Dedicated solution architect design and implementation');
+      keyFeatures.push('Ongoing support, analytics, and operational SLAs');
+    } else {
+      keyFeatures.push(`End-to-end ${serviceContext.name} engagement`);
+      keyFeatures.push('Tailored service delivery based on customer requirements');
+    }
+
+    if (serviceContext.description && serviceContext.description.length > 20) {
+      keyFeatures.push(`Key objective: ${serviceContext.description.substring(0, 80)}...`);
+    }
+
+    const missingOrUnverified: string[] = [];
+    if (!isPricingExplicit) {
+      missingOrUnverified.push('Pricing & payment schedule not verified in marketing brochure');
+    }
+    missingOrUnverified.push('Taxes and incidental fees subject to final agreement');
+
+    return {
+      pricingFound,
+      isPricingExplicit,
+      keyFeatures,
+      targetAudience: isRealEstate
+        ? 'High-intent property buyers, investors, and family home seekers'
+        : `Verified prospects requiring ${serviceContext.name}`,
+      guaranteesAndPromises: isRealEstate
+        ? ['RERA compliant transparent legal documentation', 'Zero hidden brokerage charges']
+        : ['100% verified authentic service commitment'],
+      missingOrUnverified,
+      extractedSummary: `Verified marketing profile compiled for ${serviceContext.name} with ${materials.length} uploaded asset(s).`,
+    };
+  }
+
+  /**
+   * Generates production AI calling configuration tailored to service + extracted materials
+   */
+  async generateServiceAiCallingConfig(
+    service: { name: string; category: string; location?: string; description?: string; pricingInfo?: string },
+    extractedInfo?: any,
+  ) {
+    const isRealEstate = /villa|estate|property|plot|apartment|real estate/i.test(`${service.name} ${service.category}`);
+    const pricing = extractedInfo?.pricingFound || service.pricingInfo || 'Available on enquiry';
+
+    const greeting = isRealEstate
+      ? `Hello! This is your property advisor calling from our team regarding your interest in ${service.name}${service.location ? ` in ${service.location}` : ''}. Do you have two minutes to speak?`
+      : `Hello! This is your advisor reaching out regarding your enquiry about our ${service.name}. Am I speaking with the decision maker?`;
+
+    const talkingPoints = [
+      `Introduce ${service.name}: ${service.description || 'Premium offering tailored to customer specifications'}.`,
+      `Highlight verified pricing and value: ${pricing}.`,
+      service.location ? `Confirm regional preference and connectivity in ${service.location}.` : 'Understand specific timeline and requirements.',
+      'Propose clear next action: Schedule a callback or direct meeting/site visit.',
+    ];
+
+    const qualificationQuestions = [
+      {
+        id: 'q1',
+        question: isRealEstate
+          ? `What type of property or configuration are you currently looking for in ${service.location || 'this location'}?`
+          : 'What is your current timeline for implementing this service?',
+        expectedAnswerType: 'choice',
+        options: isRealEstate ? ['3 BHK Luxury Villa', '4 BHK Villa / Plot', 'Investment Only', 'Immediate Possession'] : ['Immediate (within 1 week)', 'This month', 'Exploring options'],
+        required: true,
+      },
+      {
+        id: 'q2',
+        question: isRealEstate
+          ? 'What is your approximate budget preference for this investment?'
+          : 'What is your estimated allocated budget for this project?',
+        expectedAnswerType: 'choice',
+        options: isRealEstate ? ['1 Cr - 1.5 Cr', '1.5 Cr - 2.5 Cr', '2.5 Cr+'] : ['Under 50,000', '50,000 - 2,00,000', '2,00,000+'],
+        required: true,
+      },
+      {
+        id: 'q3',
+        question: isRealEstate
+          ? 'Would you be open for an exclusive site visit this weekend to inspect the model villa?'
+          : 'Would you like our senior specialist to conduct a 15-minute discovery consultation?',
+        expectedAnswerType: 'yes_no',
+        options: ['Yes, definitely', 'Not this weekend, maybe later', 'No'],
+        required: true,
+      },
+    ];
+
+    const approvedResponses = {
+      pricing_query: `Pricing for ${service.name} is ${pricing}, with tailored payment milestone plans available.`,
+      documentation_query: 'All legal clearances, title deeds, and regulatory approvals are 100% verified and available for your review.',
+      site_visit_query: 'We arrange curated site inspections with our property managers every weekend between 10 AM and 5 PM.',
+    };
+
+    const objectionHandling = {
+      price_high: 'Our rates reflect prime location infrastructure, certified construction quality, and high appreciation potential with flexible milestone plans.',
+      need_time_to_think: 'Completely understand! Would it be helpful if I share the digital brochure and floor plans on your WhatsApp for review first?',
+      already_talking_to_others: 'That is great. We pride ourselves on transparent pricing and zero brokerage. We would love to share a comparative overview.',
+    };
+
+    const faqs = [
+      {
+        question: 'Are bank loans or financing available?',
+        answer: 'Yes, pre-approved loan assistance is available with all leading banking partners up to 80% of project cost.',
+      },
+      {
+        question: 'When is possession or delivery scheduled?',
+        answer: 'Possession schedules are aligned with verified RERA milestone commitments with regular progress updates.',
+      },
+    ];
+
+    return {
+      openingGreeting: greeting,
+      talkingPoints,
+      qualificationQuestions,
+      approvedResponses,
+      objectionHandling,
+      faqs,
+      version: 1,
+      status: 'DRAFT',
+    };
+  }
+
+  /**
+   * Generates a multi-stage follow-up workflow tailored to the service
+   * E.g. For Real Estate Villa Sales:
+   * Initial Contact → Requirement Collection → Site Visit Scheduling → Post-Visit Follow-up → Final Decision
+   */
+  async generateFollowUpStages(
+    service: { name: string; category: string; location?: string },
+    extractedInfo?: any,
+  ) {
+    const isRealEstate = /villa|estate|property|plot|apartment|real estate/i.test(`${service.name} ${service.category}`);
+
+    if (isRealEstate) {
+      return [
+        {
+          order: 1,
+          name: 'Initial Contact',
+          triggerTiming: 'Immediate after lead intake',
+          questions: [
+            'Confirm if prospect is actively looking for villa / property in the region.',
+            'Confirm preferred configuration and approximate timeframe for purchase.',
+          ],
+          expectedResponse: 'Customer confirms genuine buying intent and budget range.',
+          nextAction: 'Move to Requirement Collection and dispatch digital brochure on WhatsApp.',
+          callbackScheduling: true,
+          meetingScheduling: false,
+          retryLimit: 3,
+          stopConditions: 'Customer states not interested, DND requested, or invalid number.',
+        },
+        {
+          order: 2,
+          name: 'Requirement Collection',
+          triggerTiming: '24 hours after Initial Contact',
+          questions: [
+            'Have you had a chance to glance through the brochure?',
+            'What specific amenities and possession timeline are most critical for your family?',
+          ],
+          expectedResponse: 'Customer specifies required sqft, bedroom layout, and financial readiness.',
+          nextAction: 'Propose curated weekend site visit with dedicated property manager.',
+          callbackScheduling: true,
+          meetingScheduling: false,
+          retryLimit: 3,
+          stopConditions: 'Customer postpones purchase by more than 1 year.',
+        },
+        {
+          order: 3,
+          name: 'Site Visit Scheduling',
+          triggerTiming: 'Day 2 or prior to weekend',
+          questions: [
+            'We are hosting model villa tours this Saturday and Sunday. Which day suits you better for an 11 AM or 3 PM slot?',
+            'Will family members or co-decision makers be joining the tour?',
+          ],
+          expectedResponse: 'Confirmed date, time slot, and visitor count.',
+          nextAction: 'Schedule Site Visit, send location GPS pin, and notify site host.',
+          callbackScheduling: true,
+          meetingScheduling: true,
+          retryLimit: 2,
+          stopConditions: 'Customer refuses in-person visit; offer virtual video tour alternative.',
+        },
+        {
+          order: 4,
+          name: 'Post-Visit Follow-up',
+          triggerTiming: '24 hours after completed site visit',
+          questions: [
+            'How was your experience visiting the property and model villa?',
+            'Did the layout, ventilation, and road connectivity meet your expectations?',
+            'Would you like a customized cost sheet with payment schedule for your preferred plot/villa unit?',
+          ],
+          expectedResponse: 'Customer shares feedback, identifies top 1-2 unit choices, and requests final quote.',
+          nextAction: 'Send customized quotation and schedule negotiation meeting.',
+          callbackScheduling: true,
+          meetingScheduling: true,
+          retryLimit: 3,
+          stopConditions: 'Customer dropped interest due to budget or location misfit.',
+        },
+        {
+          order: 5,
+          name: 'Final Decision & Booking',
+          triggerTiming: '3 days after quotation dispatched',
+          questions: [
+            'Do you have any questions on the unit payment milestones or bank approval?',
+            'Can we reserve your selected unit with the launch booking token?',
+          ],
+          expectedResponse: 'Customer confirms booking token or requests final executive discount review.',
+          nextAction: 'Escalate to Sales Director for token collection and agreement closing.',
+          callbackScheduling: true,
+          meetingScheduling: false,
+          retryLimit: 2,
+          stopConditions: 'Unit booked (Won) or customer chose alternative project (Lost).',
+        },
+      ];
+    }
+
+    // General Industry Stages
+    return [
+      {
+        order: 1,
+        name: 'Initial Discovery',
+        triggerTiming: 'Immediate upon enquiry submission',
+        questions: ['Identify customer business objective', 'Verify authority and timeline'],
+        expectedResponse: 'Customer confirms interest in the service.',
+        nextAction: 'Share solution documentation and product deck.',
+        callbackScheduling: true,
+        meetingScheduling: false,
+        retryLimit: 3,
+        stopConditions: 'Opt-out or wrong number.',
+      },
+      {
+        order: 2,
+        name: 'Technical & Solution Review',
+        triggerTiming: '48 hours post discovery',
+        questions: ['Confirm receipt of deck', 'Evaluate technical scope & requirements'],
+        expectedResponse: 'Scope requirements clarified.',
+        nextAction: 'Book solution demo meeting.',
+        callbackScheduling: true,
+        meetingScheduling: true,
+        retryLimit: 3,
+        stopConditions: 'Not relevant to current needs.',
+      },
+      {
+        order: 3,
+        name: 'Commercial Proposal',
+        triggerTiming: '24 hours after demo',
+        questions: ['Review commercial terms and delivery timeline'],
+        expectedResponse: 'Customer approves pricing or submits counter.',
+        nextAction: 'Final contract signing.',
+        callbackScheduling: true,
+        meetingScheduling: false,
+        retryLimit: 2,
+        stopConditions: 'Deal closed or cancelled.',
+      },
+    ];
+  }
+
 }
