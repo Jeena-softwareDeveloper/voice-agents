@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ServicesService } from '../../services/services/services.service';
 import { CreateServiceDto, UpdateServiceDto } from '../../dto/service.dto';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
@@ -32,5 +32,13 @@ export class ServicesController {
     @Body() dto: UpdateServiceDto,
   ) {
     return this.servicesService.updateService(tenantId, id, dto);
+  }
+
+  @Delete(':id')
+  async deleteService(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.servicesService.deleteService(tenantId, id);
   }
 }

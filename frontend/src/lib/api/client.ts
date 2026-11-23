@@ -1,13 +1,16 @@
 import { ApiError } from './error-handler';
 import { getAuthToken, getTenantId } from './interceptors';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  if (!BASE_URL) {
+    throw new Error('API client configuration error: NEXT_PUBLIC_API_URL environment variable is not defined.');
+  }
   let url = `${BASE_URL}${endpoint}`;
 
   if (options.params) {

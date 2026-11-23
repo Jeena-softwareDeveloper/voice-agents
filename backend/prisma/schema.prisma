@@ -167,6 +167,8 @@ model Tenant {
   invoices          Invoice[]
   payments          Payment[]
   auditLogs         AuditLog[]
+  sarvamVoiceSessions SarvamVoiceSession[]
+  agentConfigurations TenantAgentConfiguration[]
 
   @@map("tenants")
 }
@@ -624,3 +626,145 @@ model GlobalSetting {
 
   @@map("global_settings")
 }
+
+model PhoneNumber {
+  id               String   @id @default(uuid())
+  number           String   @unique
+  country          String   @default("India")
+  region           String
+  type             String   @default("DID_LOCAL")
+  provider         String   @default("Sarvam / Tata Telephony Trunk")
+  monthlyRent      Decimal  @default(499.00) @db.Decimal(10, 2)
+  status           String   @default("AVAILABLE")
+  assignedTenantId String?
+  renewalDate      DateTime
+  kycStatus        String   @default("VERIFIED")
+  isByot           Boolean  @default(false)
+  active           Boolean  @default(true)
+  allocatedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("phone_numbers")
+}
+
+model TenantVoicePreference {
+  id                    String   @id @default(uuid())
+  tenantId              String   @unique
+  preferredLanguage     String   @default("hi-IN")
+  preferredVoice        String   @default("meera")
+  voiceGender           String   @default("female")
+  speakingSpeed         Float    @default(1.0)
+  conversationTone      String   @default("CONSULTATIVE")
+  greetingMessage       String   @db.Text
+  businessIntroduction  String   @db.Text
+  generalInstructions   String   @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("tenant_voice_preferences")
+}
+
+model CreditTransaction {
+  id           String   @id @default(uuid())
+  tenantId     String
+  type         String   // CREDIT_PURCHASE | USAGE_DEDUCTION | REFUND | BONUS
+  amount       Decimal  @db.Decimal(10, 2)
+  balanceAfter Decimal  @db.Decimal(10, 2)
+  description  String
+  referenceId  String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("credit_transactions")
+}
+
+model SarvamVoiceSession {
+  id                String    @id @default(uuid())
+  tenantId          String
+  userId            String?
+  serviceId         String?
+  sarvamOrgId       String
+  sarvamWorkspaceId String
+  sarvamAppId       String
+  committedVersion  Int       @default(1)
+  referenceId       String    @unique
+  interactionId     String?
+  mode              String    @default("voice") // voice | phone | chat
+  status            String    @default("INITIATED") // INITIATED | CONNECTED | COMPLETED | FAILED | TIMED_OUT
+  durationSeconds   Int       @default(0)
+  billableMinutes   Decimal   @default(0) @db.Decimal(10, 2)
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  transcript        Json?
+  outputVariables   Json?
+  errorMessage      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([referenceId])
+  @@map("sarvam_voice_sessions")
+}
+
+model TenantAgentConfiguration {
+  id                     String    @id @default(uuid())
+  tenantId               String
+  serviceId              String?
+  version                Int       @default(1)
+  sourceProfileVersion   Int       @default(1)
+  status                 String    @default("DRAFT") // DRAFT | APPROVED | PUBLISHED | OUTDATED | ARCHIVED
+  agentName              String
+  agentRole              String
+  organizationContext    String    @db.Text
+  channel                String    @default("Outbound phone call over telephony")
+  conversationObjectives Json
+  openingGreeting        String    @db.Text
+  qualificationQuestions Json
+  requiredInfo           Json
+  faqs                   Json
+  objectionHandling      Json
+  speakingStyle          Json
+  followUpRules          Json
+  humanEscalationRules   Json
+  variables              Json
+  outputFields           Json
+  prohibitedClaims       Json
+  missingInformation     Json?
+  fullPrompt             String    @db.Text
+  isOutdated             Boolean   @default(false)
+  outdatedReason         String?
+  generatedAt            DateTime  @default(now())
+  approvedAt             DateTime?
+  approvedBy             String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  tenant   Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions AgentConfigurationVersion[]
+
+  @@index([tenantId, status])
+  @@map("tenant_agent_configurations")
+}
+
+model AgentConfigurationVersion {
+  id              String   @id @default(uuid())
+  configurationId String
+  tenantId        String
+  versionNumber   Int
+  status          String
+  snapshot        Json
+  changeNotes     String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  configuration TenantAgentConfiguration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+
+  @@index([configurationId])
+  @@index([tenantId])
+  @@map("agent_configuration_versions")
+}
+
+

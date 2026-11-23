@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -67,7 +67,7 @@ export default function CreateClientPage() {
             <div className="p-2.5 bg-white border border-slate-200 rounded text-xs font-mono text-slate-800 break-all select-all">
               {invitationResult.invitationLink}
             </div>
-            <p className="text-[11px] text-slate-400 mt-2">
+            <p className="text-caption text-slate-400 mt-2">
               The client administrator ({invitationResult.email}) will open this link to set their password and complete business onboarding.
             </p>
           </div>
@@ -110,7 +110,7 @@ export default function CreateClientPage() {
               required
               value={form.companyName}
               onChange={(e) => handleChange('companyName', e.target.value)}
-              placeholder="e.g. Apex Living Developers"
+              placeholder="e.g. Apex Cloud Solutions / CareWell Clinics"
             />
             <Input
               label="Business Email"
@@ -130,12 +130,14 @@ export default function CreateClientPage() {
             <Select
               label="Business Type"
               options={[
-                { value: 'Real Estate & Infrastructure', label: 'Real Estate & Infrastructure' },
-                { value: 'Financial Services & Loans', label: 'Financial Services & Loans' },
-                { value: 'Healthcare & Clinics', label: 'Healthcare & Clinics' },
-                { value: 'Education & Admissions', label: 'Education & Admissions' },
-                { value: 'Automotive & Dealerships', label: 'Automotive & Dealerships' },
                 { value: 'SaaS & Enterprise Technology', label: 'SaaS & Enterprise Technology' },
+                { value: 'Healthcare & Clinics', label: 'Healthcare & Clinics' },
+                { value: 'Financial Services & Loans', label: 'Financial Services & Loans' },
+                { value: 'Real Estate & Infrastructure', label: 'Real Estate & Infrastructure' },
+                { value: 'Education & Admissions', label: 'Education & Admissions' },
+                { value: 'E-commerce & Retail', label: 'E-commerce & Retail' },
+                { value: 'Manufacturing & Logistics', label: 'Manufacturing & Logistics' },
+                { value: 'Professional Services', label: 'Professional Services' },
               ]}
               value={form.businessType}
               onChange={(e) => handleChange('businessType', e.target.value)}

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsBoolean } from 'class-validator';
 
 export class CreateServiceDto {
   @IsNotEmpty()
@@ -52,5 +52,6 @@ export class UpdateServiceDto {
   additionalInfo?: string;
 
   @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
 }

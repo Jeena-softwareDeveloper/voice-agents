@@ -18,7 +18,7 @@ export class ServicesService {
       throw new BadRequestException(`A service named '${dto.name}' already exists for your company.`);
     }
 
-    return this.prisma.service.create({
+    const created = await this.prisma.service.create({
       data: {
         tenantId,
         name: dto.name,
@@ -31,6 +31,18 @@ export class ServicesService {
         isActive: true,
       },
     });
+
+    try {
+      await (this.prisma as any).tenantAgentConfiguration.updateMany({
+        where: { tenantId, status: { in: ['APPROVED', 'PUBLISHED'] } },
+        data: {
+          isOutdated: true,
+          outdatedReason: 'A new service offering was added. Review and regenerate AI instructions.',
+        },
+      });
+    } catch {}
+
+    return created;
   }
 
   async getTenantServices(tenantId: string) {
@@ -67,18 +79,62 @@ export class ServicesService {
   async updateService(tenantId: string, id: string, dto: UpdateServiceDto) {
     const service = await this.getServiceById(tenantId, id);
 
+    if (dto.name && dto.name.toLowerCase() !== service.name.toLowerCase()) {
+      const existing = await this.prisma.service.findFirst({
+        where: {
+          tenantId,
+          name: { equals: dto.name, mode: 'insensitive' },
+          id: { not: service.id },
+        },
+      });
+      if (existing) {
+        throw new BadRequestException(`A service named '${dto.name}' already exists.`);
+      }
+    }
+
     // If critical attributes changed, revert approval status so admin reviews AI mapping
     const requiresReapproval =
       (dto.name && dto.name !== service.name) ||
       (dto.description && dto.description !== service.description);
 
-    return this.prisma.service.update({
+    const updated = await this.prisma.service.update({
       where: { id: service.id },
       data: {
         ...dto,
         approvalStatus: requiresReapproval ? 'PENDING_APPROVAL' : service.approvalStatus,
       },
     });
+
+    try {
+      await (this.prisma as any).tenantAgentConfiguration.updateMany({
+        where: { tenantId, status: { in: ['APPROVED', 'PUBLISHED'] } },
+        data: {
+          isOutdated: true,
+          outdatedReason: 'Service offering details were updated. Review and regenerate AI instructions.',
+        },
+      });
+    } catch {}
+
+    return updated;
+  }
+
+  async deleteService(tenantId: string, id: string) {
+    const service = await this.getServiceById(tenantId, id);
+    const deleted = await this.prisma.service.delete({
+      where: { id: service.id },
+    });
+
+    try {
+      await (this.prisma as any).tenantAgentConfiguration.updateMany({
+        where: { tenantId, status: { in: ['APPROVED', 'PUBLISHED'] } },
+        data: {
+          isOutdated: true,
+          outdatedReason: 'A service offering was deleted. Review and regenerate AI instructions.',
+        },
+      });
+    } catch {}
+
+    return deleted;
   }
 
   // Admin: View all services across tenants requiring review/approval

@@ -13,6 +13,7 @@ import { SarvamService } from './integrations/sarvam/sarvam.service';
 import { TelephonyService } from './integrations/telephony/telephony.service';
 import { EmailService } from './integrations/email/email.service';
 import { PaymentGatewayService } from './integrations/payments/payment-gateway.service';
+import { GeminiService } from './integrations/gemini/gemini.service';
 
 // Services
 import { AuthService } from './services/auth/auth.service';
@@ -23,6 +24,8 @@ import { AiConversationsService } from './services/ai-conversations/ai-conversat
 import { LeadsService } from './services/leads/leads.service';
 import { ImportsService } from './services/imports/imports.service';
 import { AiCallingService } from './services/ai-calling/ai-calling.service';
+import { AgentConfigurationService } from './services/ai-calling/agent-configuration.service';
+import { SarvamAgentSocketService } from './services/ai-calling/sarvam-agent-socket.service';
 import { CallsService } from './services/calls/calls.service';
 import { SalesPipelineService } from './services/sales-pipeline/sales-pipeline.service';
 import { FollowUpsService } from './services/follow-ups/follow-ups.service';
@@ -40,6 +43,8 @@ import { ServicesController } from './controllers/services/services.controller';
 import { LeadsController } from './controllers/leads/leads.controller';
 import { ImportsController } from './controllers/imports/imports.controller';
 import { AiCallingController } from './controllers/ai-calling/ai-calling.controller';
+import { AgentConfigurationController } from './controllers/ai-calling/agent-configuration.controller';
+import { SarvamRuntimeController } from './controllers/ai-calling/sarvam-runtime.controller';
 import { CallsController } from './controllers/calls/calls.controller';
 import { SalesPipelineController } from './controllers/sales-pipeline/sales-pipeline.controller';
 import { FollowUpsController } from './controllers/follow-ups/follow-ups.controller';
@@ -71,6 +76,8 @@ import { SettingsController } from './controllers/settings/settings.controller';
     LeadsController,
     ImportsController,
     AiCallingController,
+    AgentConfigurationController,
+    SarvamRuntimeController,
     CallsController,
     SalesPipelineController,
     FollowUpsController,
@@ -86,6 +93,7 @@ import { SettingsController } from './controllers/settings/settings.controller';
     TelephonyService,
     EmailService,
     PaymentGatewayService,
+    GeminiService,
     AuthService,
     TenantsService,
     BusinessOnboardingService,
@@ -94,6 +102,8 @@ import { SettingsController } from './controllers/settings/settings.controller';
     LeadsService,
     ImportsService,
     AiCallingService,
+    AgentConfigurationService,
+    SarvamAgentSocketService,
     CallsService,
     SalesPipelineService,
     FollowUpsService,

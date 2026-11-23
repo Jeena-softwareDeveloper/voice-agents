@@ -102,7 +102,7 @@ export default function LeadDetailPage() {
               onClick={handleTriggerAiCall}
               leftIcon={<Bot className="w-3.5 h-3.5" />}
             >
-              Call via Sarvam AI
+              Call via AI Voice
             </Button>
           </div>
         }
@@ -142,7 +142,7 @@ export default function LeadDetailPage() {
             <h4 className="text-xs font-bold text-slate-900 mb-2">Associated Service</h4>
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs">
               <span className="font-bold text-brand-700">{lead.service.name}</span>
-              <p className="text-slate-500 text-[11px] mt-0.5">{lead.service.category}</p>
+              <p className="text-slate-500 text-caption mt-0.5">{lead.service.category}</p>
             </div>
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function LeadDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
             <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Bot className="w-4 h-4 text-purple-600" /> Sarvam AI Voice Call Operations ({lead.calls?.length || 0})
+              <Bot className="w-4 h-4 text-purple-600" /> AI Voice Call Operations ({lead.calls?.length || 0})
             </h3>
 
             <div className="space-y-4">
@@ -177,7 +177,7 @@ export default function LeadDetailPage() {
                     {call.transcript && (
                       <div>
                         <span className="font-medium text-slate-500">Transcript:</span>
-                        <pre className="text-[11px] text-slate-700 mt-0.5 bg-white p-2.5 rounded border border-slate-200 whitespace-pre-wrap font-sans">
+                        <pre className="text-caption text-slate-700 mt-0.5 bg-white p-2.5 rounded border border-slate-200 whitespace-pre-wrap font-sans">
                           {call.transcript}
                         </pre>
                       </div>

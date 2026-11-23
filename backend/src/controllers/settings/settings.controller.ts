@@ -22,4 +22,27 @@ export class SettingsController {
   ) {
     return this.settingsService.updateTenantCallingSettings(tenantId, dto);
   }
+
+  @Get('company')
+  async getCompanyProfile(@CurrentTenant() tenantId: string) {
+    return this.settingsService.getCompanyProfile(tenantId);
+  }
+
+  @Put('company')
+  async updateCompanyProfile(
+    @CurrentTenant() tenantId: string,
+    @Body()
+    dto: {
+      companyName: string;
+      email?: string;
+      phone?: string;
+      website?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      businessType?: string;
+    },
+  ) {
+    return this.settingsService.updateCompanyProfile(tenantId, dto);
+  }
 }

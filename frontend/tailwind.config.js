@@ -8,6 +8,18 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-family-base)'],
+        mono: ['var(--font-family-mono)'],
+      },
+      fontSize: {
+        'micro': ['var(--font-size-micro, 0.625rem)', { lineHeight: 'var(--line-height-micro, 0.875rem)', letterSpacing: '0.01em' }],
+        'caption': ['var(--font-size-caption, 0.6875rem)', { lineHeight: 'var(--line-height-caption, 1rem)', letterSpacing: '0.005em' }],
+        'label': ['var(--font-size-label, 0.8125rem)', { lineHeight: '1.125rem' }],
+        'card-title': ['var(--font-size-card-title, 0.9375rem)', { lineHeight: '1.35rem' }],
+        'section-title': ['var(--font-size-section-title, 1.125rem)', { lineHeight: '1.5rem' }],
+        'page-title': ['var(--font-size-page-title, 1.5rem)', { lineHeight: '2rem' }],
+      },
       colors: {
         brand: {
           50: '#eff6ff',

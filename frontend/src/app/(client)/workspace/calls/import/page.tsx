@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -68,15 +68,15 @@ export default function ImportLeadsPage() {
           <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200 mb-6 text-center">
             <div>
               <span className="block text-xl font-bold text-slate-900">{importSummary.totalRows}</span>
-              <span className="text-[11px] text-slate-500">Total Rows</span>
+              <span className="text-caption text-slate-500">Total Rows</span>
             </div>
             <div>
               <span className="block text-xl font-bold text-emerald-600">{importSummary.validRows}</span>
-              <span className="text-[11px] text-slate-500">Valid Leads Created</span>
+              <span className="text-caption text-slate-500">Valid Leads Created</span>
             </div>
             <div>
               <span className="block text-xl font-bold text-amber-600">{importSummary.invalidRows}</span>
-              <span className="text-[11px] text-slate-500">Skipped / Duplicates</span>
+              <span className="text-caption text-slate-500">Skipped / Duplicates</span>
             </div>
           </div>
 
@@ -121,7 +121,7 @@ export default function ImportLeadsPage() {
               value={selectedServiceId}
               onChange={(e) => setSelectedServiceId(e.target.value)}
             />
-            <p className="text-[11px] text-slate-500 mt-1">
+            <p className="text-caption text-slate-500 mt-1">
               Select a service if all rows belong to the same category, or leave blank if your spreadsheet includes a <em>Service Category</em> column.
             </p>
           </div>
@@ -142,7 +142,7 @@ export default function ImportLeadsPage() {
                 <span className="block text-xs font-bold text-slate-800">
                   {file ? file.name : 'Click to select Excel (.xlsx) or CSV file'}
                 </span>
-                <span className="block text-[11px] text-slate-400 mt-1">
+                <span className="block text-caption text-slate-400 mt-1">
                   Expected columns: Lead Name, Phone, Email, Location, Service Category
                 </span>
               </label>

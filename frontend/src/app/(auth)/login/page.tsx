@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -102,7 +102,7 @@ export default function LoginPage() {
 
           {/* Quick Demo Credentials */}
           <div className="mt-6 pt-5 border-t border-slate-100">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <div className="text-caption font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-brand-600" />
               Demo Quick Fill
             </div>
@@ -116,7 +116,7 @@ export default function LoginPage() {
                 className="p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-left font-medium text-slate-700"
               >
                 <div className="font-semibold text-brand-600">Platform Admin</div>
-                <div className="text-[10px] text-slate-400">admin@acrmplatform.com</div>
+                <div className="text-micro text-slate-400">admin@acrmplatform.com</div>
               </button>
               <button
                 type="button"
@@ -127,7 +127,7 @@ export default function LoginPage() {
                 className="p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-left font-medium text-slate-700"
               >
                 <div className="font-semibold text-emerald-600">Client Workspace</div>
-                <div className="text-[10px] text-slate-400">client@jjrealestate.in</div>
+                <div className="text-micro text-slate-400">client@jjrealestate.in</div>
               </button>
             </div>
           </div>

@@ -18,6 +18,15 @@ export const API_ENDPOINTS = {
     AI_OPTIONS: '/platform-admin/ai-options',
     PAYMENTS_OVERVIEW: '/platform-admin/payments/overview',
     SETTINGS: '/platform-admin/settings',
+    SARVAM_STATUS: '/platform-admin/sarvam/status',
+    SARVAM_TEST: '/platform-admin/sarvam/test-connection',
+    SARVAM_METRICS: '/platform-admin/sarvam/metrics',
+    SARVAM_LOGS: '/platform-admin/sarvam/logs',
+    TELEPHONY_NUMBERS: '/platform-admin/telephony/numbers',
+    TELEPHONY_ALLOCATE: '/platform-admin/telephony/numbers/allocate',
+    TELEPHONY_RELEASE: '/platform-admin/telephony/numbers/release',
+    UPDATE_AI_QUOTA: (id: string) => `/platform-admin/clients/${id}/ai-quota`,
+    SARVAM_BILLING_REPORT: '/platform-admin/reports/sarvam-billing',
   },
   // Tenants (Platform Admin control)
   TENANTS: {
@@ -42,8 +51,18 @@ export const API_ENDPOINTS = {
       BATCHES: '/imports/batches',
     },
     AI_CALLING: {
+      OVERVIEW: '/ai-calling/overview',
+      OPTIONS: '/ai-calling/options',
+      VOICE_PREFS: '/ai-calling/voice-preferences',
+      PREVIEW_VOICE: '/ai-calling/preview-voice',
+      PHONE_NUMBERS: '/ai-calling/phone-numbers',
+      REQUEST_NUMBER: '/ai-calling/phone-numbers/request',
+      RELEASE_NUMBER: (numberId: string) => `/ai-calling/phone-numbers/${numberId}`,
+      TOPUP_CREDITS: '/ai-calling/credits/topup',
       DISPATCH: '/ai-calling/dispatch',
       BULK_DISPATCH: '/ai-calling/bulk-dispatch',
+      KNOWLEDGE_BASE: (serviceId: string) => `/ai-calling/knowledge-base/${serviceId}`,
+      SIMULATE_TEST: '/ai-calling/simulate-test',
     },
     CALLS: {
       BASE: '/calls',
@@ -70,6 +89,7 @@ export const API_ENDPOINTS = {
     },
     SETTINGS: {
       CALLING: '/settings/calling',
+      COMPANY: '/settings/company',
     },
   },
 };

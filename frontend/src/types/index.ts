@@ -22,6 +22,10 @@ export interface Tenant {
   aiCallingEnabled: boolean;
   monthlyCallingLimit: number;
   usedCallingMinutes: number;
+  creditBalance?: number;
+  dailyCallingLimit?: number;
+  concurrencyLimit?: number;
+  kycStatus?: string;
   createdAt: string;
   subscription?: {
     planName: string;
@@ -101,11 +105,14 @@ export interface Lead {
   lastCallDate?: string;
   nextFollowUpDate?: string;
   qualificationNotes?: string;
+  notes?: string;
   contact: Contact;
   service: Service;
   calls?: Call[];
   followUps?: FollowUp[];
   tenant?: { id: string; name: string };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Call {
@@ -180,3 +187,259 @@ export interface Invoice {
   tenant?: { id: string; name: string; email: string };
   payments?: any[];
 }
+
+export interface TelephonyNumber {
+  id: string;
+  number: string;
+  country: string;
+  region: string;
+  type: 'DID_LOCAL' | 'TOLL_FREE' | 'MOBILE_VIRTUAL';
+  provider: string;
+  monthlyRent: number;
+  status: 'AVAILABLE' | 'ASSIGNED' | 'PENDING_KYC' | 'RESERVED';
+  assignedTenantId?: string | null;
+  renewalDate: string;
+  kycStatus: 'VERIFIED' | 'PENDING' | 'REJECTED';
+  isByot: boolean;
+  active: boolean;
+  allocatedAt?: string;
+}
+
+export interface PronunciationEntry {
+  word: string;
+  phonetic: string;
+  notes?: string;
+}
+
+export interface ServiceKnowledgeItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: 'PRICING' | 'LEGAL_APPROVALS' | 'LOCATION' | 'AMENITIES' | 'FINANCING' | 'GENERAL';
+}
+
+export interface ServiceKnowledgeBaseData {
+  serviceId: string;
+  serviceName: string;
+  category: string;
+  knowledgeBase: ServiceKnowledgeItem[];
+  pricingGuidelines?: string;
+  disallowedTopics?: string;
+  handOffTriggers?: string[];
+}
+
+export interface ConversationTurn {
+  speaker: 'ai' | 'customer';
+  text: string;
+  timestampSeconds: number;
+  interrupted?: boolean;
+}
+
+export interface SarvamToolExecution {
+  toolName: string;
+  arguments: Record<string, any>;
+  result: Record<string, any>;
+  timestamp: string;
+}
+
+export type TestScenarioType =
+  | 'NATURAL_TAMIL'
+  | 'TANGLISH'
+  | 'ENGLISH'
+  | 'BARGE_IN_INTERRUPTION'
+  | 'CUSTOMER_SILENCE'
+  | 'UNEXPECTED_QUESTION_OBJECTION'
+  | 'HUMAN_HANDOFF';
+
+export interface TestSimulationResult {
+  scenario: TestScenarioType;
+  title: string;
+  description: string;
+  language: string;
+  voice: string;
+  turns: ConversationTurn[];
+  metrics: {
+    averageLatencyMs: number;
+    bargeInHandled: boolean;
+    silenceNudgeTriggered: boolean;
+    hallucinationRate: string;
+    toolExecutions: SarvamToolExecution[];
+    humanHandoffTriggered: boolean;
+    qualityScore: number;
+  };
+  summary: string;
+  extractedRequirements: Record<string, any>;
+  durationSeconds: number;
+  billableCostInr: number;
+}
+
+export interface TenantVoicePreference {
+  id?: string;
+  tenantId: string;
+  preferredLanguage: string;
+  secondaryLanguage?: string;
+  preferredVoice: string;
+  voiceGender?: string;
+  speakingSpeed: number;
+  conversationTone: string;
+  greetingMessage: string;
+  businessIntroduction: string;
+  generalInstructions?: string;
+  bargeInEnabled?: boolean;
+  silenceThresholdMs?: number;
+  responseDelayMs?: number;
+  transparentAiDisclosure?: boolean;
+  tanglishEnabled?: boolean;
+  quietCallerNudgeEnabled?: boolean;
+  quietCallerNudgePrompt?: string;
+  humanHandoffEnabled?: boolean;
+  humanHandoffNumber?: string;
+  pronunciationDictionary?: PronunciationEntry[];
+}
+
+export interface SarvamVoice {
+  id: string;
+  name: string;
+  gender: 'female' | 'male';
+  languages: string[];
+  description: string;
+  sampleUrl: string;
+  recommendedUse: string;
+  engine?: string;
+}
+
+export interface SarvamLanguage {
+  code: string;
+  name: string;
+  nativeName: string;
+  defaultVoice: string;
+  supportsTanglish?: boolean;
+}
+
+export interface SarvamProviderHealth {
+  status: 'CONNECTED' | 'DEGRADED' | 'DISCONNECTED';
+  latencyMs: number;
+  availableCredits: number;
+  activeModel: string;
+  lastCheckedAt: string;
+  baseUrl?: string;
+  error?: string;
+}
+
+export interface SarvamApiAuditLog {
+  id: string;
+  timestamp: string;
+  endpoint: string;
+  method: string;
+  statusCode: number;
+  latencyMs: number;
+  requestId: string;
+  status: 'SUCCESS' | 'ERROR';
+  tenantId?: string;
+  leadId?: string;
+  errorMessage?: string;
+}
+
+export interface AgentQualificationQuestion {
+  id: string;
+  question: string;
+  purpose: string;
+  expectedDataType: 'string' | 'number' | 'boolean' | 'choice';
+  choices?: string[];
+}
+
+export interface VoiceProviderLanguage {
+  id: string;
+  name: string;
+  nativeName: string;
+  code: string;
+  defaultSpeakerId?: string;
+}
+
+export interface VoiceProviderSpeaker {
+  id: string;
+  name: string;
+  gender: 'female' | 'male';
+  description?: string;
+  supportedLanguages?: string[];
+}
+
+export interface VoiceProviderModel {
+  id: string;
+  name: string;
+  description: string;
+  isDefault?: boolean;
+}
+
+export interface ProviderCapabilities {
+  provider: string;
+  version: string;
+  languages: VoiceProviderLanguage[];
+  voices: VoiceProviderSpeaker[];
+  models: VoiceProviderModel[];
+  defaultSettings: {
+    languageId: string;
+    voiceId: string;
+    modelId: string;
+  };
+}
+
+export interface AgentOutputField {
+  key: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean';
+  description: string;
+}
+
+export interface AgentConfiguration {
+  id: string;
+  tenantId: string;
+  version: number;
+  sourceProfileVersion: number;
+  status: 'DRAFT' | 'APPROVED' | 'PUBLISHED' | 'OUTDATED' | 'ARCHIVED';
+  agentName: string;
+  agentRole: string;
+  organizationContext: string;
+  channel: string;
+  conversationObjectives: string[];
+  openingGreeting: string;
+  qualificationQuestions: AgentQualificationQuestion[];
+  requiredInfo: string[];
+  faqs: Array<{ question: string; answer: string; category: string }>;
+  objectionHandling: Array<{ objection: string; response: string }>;
+  speakingStyle: {
+    maxWordsPerTurn?: number;
+    pacing?: string;
+    bargeInRule?: string;
+    fillersAllowed?: string[];
+    preserveTerms?: string[];
+    language?: string;
+    speaker?: string;
+    model?: string;
+  };
+  followUpRules: string[];
+  humanEscalationRules: string[];
+  variables: Record<string, string>;
+  outputFields: AgentOutputField[];
+  prohibitedClaims: string[];
+  missingInformation?: string[];
+  fullPrompt: string;
+  isOutdated: boolean;
+  outdatedReason?: string | null;
+  generatedAt: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  history?: Array<{
+    id: string;
+    version: number;
+    status: string;
+    agentName: string;
+    agentRole: string;
+    generatedAt: string;
+    approvedAt?: string | null;
+    approvedBy?: string | null;
+    isOutdated: boolean;
+    outdatedReason?: string | null;
+  }>;
+}
+

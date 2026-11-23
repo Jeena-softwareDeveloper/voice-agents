@@ -7,7 +7,7 @@ import { handleApiError } from '@/lib/api/error-handler';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/common/buttons/Button';
 import { Input } from '@/components/common/inputs/Input';
-import { Layers, ArrowRight } from 'lucide-react';
+import { Layers, ArrowRight, Info } from 'lucide-react';
 
 export default function CreateServicePage() {
   const router = useRouter();
@@ -43,39 +43,50 @@ export default function CreateServicePage() {
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Create Service Category"
-        description="Define a new service offering. Once submitted, the Platform Admin will review the offering, configure the Sarvam AI conversation script, and activate automated outbound calling."
+        description="Define a new service offering. Once submitted, Platform Admin will configure the AI conversation prompt and approve automated calling."
+        infoTooltip="Each service can have its own AI conversation and associated leads. Enter accurate details so the AI voice agent can represent your product effectively."
         breadcrumbs={[
           { label: 'Services', href: '/workspace/services' },
           { label: 'Create Service' },
         ]}
       />
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs max-w-2xl">
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-2xs max-w-2xl">
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
               {error}
             </div>
           )}
 
-          <Input
-            label="Service Name"
-            required
-            value={form.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            placeholder="e.g. Residential Plots / 3BHK Luxury Flats"
-          />
+          <div>
+            <Input
+              label="Service Name"
+              required
+              value={form.name}
+              onChange={(e) => handleChange('name', e.target.value)}
+              placeholder="e.g. Cloud Infrastructure Consulting / Health Checkup Plan / Premium Advisory"
+            />
+            <p className="text-caption text-slate-500 mt-1">
+              Enter the name of the product or service associated with these customer enquiries.
+            </p>
+          </div>
 
-          <Input
-            label="Service Category"
-            required
-            value={form.category}
-            onChange={(e) => handleChange('category', e.target.value)}
-            placeholder="e.g. Land Development / High-Rise Residential"
-          />
+          <div>
+            <Input
+              label="Service Category / Industry"
+              required
+              value={form.category}
+              onChange={(e) => handleChange('category', e.target.value)}
+              placeholder="e.g. SaaS & Cloud / Healthcare / Financial Services / Real Estate / Professional Services"
+            />
+            <p className="text-caption text-slate-500 mt-1">
+              Categorizes your offering for specialized AI conversation templates.
+            </p>
+          </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -86,45 +97,67 @@ export default function CreateServicePage() {
               rows={3}
               value={form.description}
               onChange={(e) => handleChange('description', e.target.value)}
-              className="w-full text-sm p-3 rounded-md border border-slate-300 focus:outline-none focus:border-brand-500"
-              placeholder="Describe the service in detail for the AI calling prompt..."
+              className="w-full text-xs p-2.5 rounded-md border border-slate-300 focus:outline-none focus:border-blue-500 leading-relaxed text-slate-900"
+              placeholder="Explain key features, deliverables, specifications, and primary customer benefits..."
             />
+            <p className="text-caption text-slate-500 mt-1">
+              Explain what this service offers. This information helps configure the appropriate AI conversation.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Location"
-              value={form.location}
-              onChange={(e) => handleChange('location', e.target.value)}
-              placeholder="e.g. Wagholi, Pune"
-            />
-            <Input
-              label="Pricing Details"
-              value={form.pricingInfo}
-              onChange={(e) => handleChange('pricingInfo', e.target.value)}
-              placeholder="e.g. Starting from ₹35 Lakhs"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <Input
+                label="Location / Region"
+                value={form.location}
+                onChange={(e) => handleChange('location', e.target.value)}
+                placeholder="e.g. Pan-India / Regional / Mumbai / Remote"
+              />
+              <p className="text-caption text-slate-500 mt-1">
+                Target geographic market or delivery location.
+              </p>
+            </div>
+
+            <div>
+              <Input
+                label="Pricing Information"
+                value={form.pricingInfo}
+                onChange={(e) => handleChange('pricingInfo', e.target.value)}
+                placeholder="e.g. Starting from ₹10,000 / Custom Quote"
+              />
+              <p className="text-caption text-slate-500 mt-1">
+                Base price or starting range for lead qualification.
+              </p>
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Additional Enquiry / Qualification Notes
+              Additional Details / FAQs
             </label>
             <textarea
               rows={2}
               value={form.additionalInfo}
               onChange={(e) => handleChange('additionalInfo', e.target.value)}
-              className="w-full text-sm p-3 rounded-md border border-slate-300 focus:outline-none focus:border-brand-500"
-              placeholder="Key specifications, RERA IDs, or loan approval banks..."
+              className="w-full text-xs p-2.5 rounded-md border border-slate-300 focus:outline-none focus:border-blue-500 leading-relaxed text-slate-900"
+              placeholder="RERA numbers, possession dates, bank loan approvals (SBI, HDFC), or special offers..."
             />
+            <p className="text-caption text-slate-500 mt-1">
+              The AI voice agent will use these answers when prospects ask specific questions on phone calls.
+            </p>
           </div>
 
-          <div className="pt-2 flex items-center gap-3">
-            <Button type="submit" isLoading={isLoading} rightIcon={<ArrowRight className="w-4 h-4" />}>
-              Submit for Admin Review
-            </Button>
-            <Button type="button" variant="outline" onClick={() => router.push('/workspace/services')}>
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/workspace/services')}
+            >
               Cancel
+            </Button>
+            <Button type="submit" size="sm" isLoading={isLoading} rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+              Submit Offering
             </Button>
           </div>
         </form>

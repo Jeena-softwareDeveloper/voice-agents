@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -65,7 +65,7 @@ export default function AdminDashboardPage() {
               <div>
                 <p className="text-xs font-medium text-slate-500">{stat.label}</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{stat.value}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{stat.sub}</p>
+                <p className="text-caption text-slate-400 mt-0.5">{stat.sub}</p>
               </div>
               <div className={`p-3 rounded-xl ${stat.color}`}>
                 <Icon className="w-6 h-6" />
@@ -93,15 +93,15 @@ export default function AdminDashboardPage() {
                 <div key={client.id} className="p-4 flex items-center justify-between hover:bg-slate-50/70 transition-colors">
                   <div>
                     <h4 className="text-xs font-bold text-slate-900">{client.name}</h4>
-                    <p className="text-[11px] text-slate-500">{client.city}, {client.state} • {client.businessType}</p>
+                    <p className="text-caption text-slate-500">{client.city}, {client.state} • {client.businessType}</p>
                   </div>
                   <div className="text-right">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold ${
+                    <span className={`inline-flex px-2 py-0.5 rounded text-micro font-semibold ${
                       client.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
                     }`}>
                       {client.status}
                     </span>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{client._count?.leads || 0} leads • {client._count?.calls || 0} calls</p>
+                    <p className="text-micro text-slate-400 mt-0.5">{client._count?.leads || 0} leads • {client._count?.calls || 0} calls</p>
                   </div>
                 </div>
               ))
@@ -128,14 +128,14 @@ export default function AdminDashboardPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-bold text-slate-900">{call.lead?.contact?.fullName || call.recipientNumber}</p>
-                      <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded">
+                      <span className="text-micro font-medium bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded">
                         {call.service?.name}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{call.tenant?.name}</p>
+                    <p className="text-caption text-slate-500 mt-0.5">{call.tenant?.name}</p>
                   </div>
                   <div className="text-right">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                    <span className={`inline-flex px-2 py-0.5 rounded text-micro font-bold ${
                       call.outcome === 'QUALIFIED'
                         ? 'bg-emerald-50 text-emerald-700'
                         : call.outcome === 'INTERESTED'
@@ -144,7 +144,7 @@ export default function AdminDashboardPage() {
                     }`}>
                       {call.outcome || call.status}
                     </span>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{call.durationSeconds}s duration</p>
+                    <p className="text-micro text-slate-400 mt-0.5">{call.durationSeconds}s duration</p>
                   </div>
                 </div>
               ))

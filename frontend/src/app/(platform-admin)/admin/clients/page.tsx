@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -32,7 +32,7 @@ export default function AdminClientsListPage() {
       cell: (t) => (
         <div>
           <div className="font-semibold text-slate-900">{t.name}</div>
-          <div className="text-[11px] text-slate-400 font-mono">ID: {t.id.slice(0, 8)}...</div>
+          <div className="text-caption text-slate-400 font-mono">ID: {t.id.slice(0, 8)}...</div>
         </div>
       ),
     },
@@ -46,7 +46,7 @@ export default function AdminClientsListPage() {
       cell: (t) => (
         <div>
           <div className="text-xs text-slate-800">{t.email}</div>
-          <div className="text-[11px] text-slate-400">{t.phone}</div>
+          <div className="text-caption text-slate-400">{t.phone}</div>
         </div>
       ),
     },

@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState } from 'react';
 import { customersApi } from '@/features/customers/api/customers.api';
 import { Customer } from '@/types';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Table, Column } from '@/components/common/tables/Table';
-import { Users, CheckCircle2, IndianRupee } from 'lucide-react';
+import { DataTable, DataTableColumn } from '@/components/common/tables/DataTable';
+import { Users, IndianRupee, CheckCircle2 } from 'lucide-react';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -19,35 +19,42 @@ export default function CustomersPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const columns: Column<Customer>[] = [
+  const columns: DataTableColumn<Customer>[] = [
     {
+      id: 'customer',
       header: 'Customer Name',
+      sortable: true,
       cell: (c) => (
         <div>
-          <div className="font-semibold text-slate-900">{c.contact.fullName}</div>
-          <div className="text-[11px] text-slate-400 font-mono">{c.contact.phone}</div>
+          <span className="font-bold text-slate-900 text-xs block">{c.contact.fullName}</span>
+          <span className="font-mono text-caption text-slate-400 block">{c.contact.phone}</span>
         </div>
       ),
     },
     {
+      id: 'contactInfo',
       header: 'Email & Location',
       cell: (c) => (
         <div>
-          <div className="text-xs text-slate-800">{c.contact.email || '-'}</div>
-          <div className="text-[11px] text-slate-400">{c.contact.location || '-'}</div>
+          <span className="text-xs text-slate-800 block">{c.contact.email || '—'}</span>
+          <span className="text-caption text-slate-400 block">{c.contact.location || '—'}</span>
         </div>
       ),
     },
     {
+      id: 'service',
       header: 'Primary Service',
+      sortable: true,
       cell: (c) => (
-        <span className="font-semibold text-brand-700 text-xs">
+        <span className="font-semibold text-slate-800 text-xs">
           {c.primaryService?.name || 'General Product'}
         </span>
       ),
     },
     {
-      header: 'Deal / Contract Value',
+      id: 'value',
+      header: 'Contract / Deal Value',
+      sortable: true,
       cell: (c) => (
         <span className="text-xs font-bold text-emerald-700">
           ₹{Number(c.totalContractValue || 0).toLocaleString('en-IN')}
@@ -55,36 +62,74 @@ export default function CustomersPage() {
       ),
     },
     {
-      header: 'Status',
+      id: 'status',
+      header: 'Account Status',
+      sortable: true,
       cell: (c) => (
-        <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-caption font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
           {c.status}
         </span>
       ),
     },
     {
+      id: 'conversionDate',
       header: 'Conversion Date',
+      sortable: true,
       cell: (c) => (
         <span className="text-xs text-slate-500">
-          {new Date(c.conversionDate).toLocaleDateString()}
+          {new Date(c.conversionDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
         </span>
       ),
     },
   ];
 
+  const renderMobileCustomerCard = (c: Customer) => (
+    <div className="bg-white rounded-lg border border-slate-200 p-3.5 space-y-2.5 shadow-2xs">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <span className="font-bold text-xs text-slate-900 block">{c.contact.fullName}</span>
+          <span className="font-mono text-caption text-slate-500 block">{c.contact.phone}</span>
+        </div>
+        <span className="text-caption font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+          ₹{Number(c.totalContractValue || 0).toLocaleString('en-IN')}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs py-1.5 border-y border-slate-100 bg-slate-50/50 px-2 rounded">
+        <div>
+          <span className="text-micro uppercase font-semibold text-slate-400 block">Service</span>
+          <span className="font-semibold text-slate-800 text-caption block truncate">
+            {c.primaryService?.name || 'General Product'}
+          </span>
+        </div>
+        <div>
+          <span className="text-micro uppercase font-semibold text-slate-400 block">Converted</span>
+          <span className="text-caption text-slate-600 block truncate">
+            {new Date(c.conversionDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div>
+    <div className="space-y-3.5">
       <PageHeader
-        title="Converted Customers"
-        description="Centralized directory of customers converted from qualified leads. Each record references the authoritative contact without duplicating phone numbers or profile data."
+        title="Customers"
+        description="Active converted customer accounts and closed contracts generated from qualified leads."
+        infoTooltip="Access customer profiles and their enquiry history. Leads that reach the 'Won' stage automatically convert to customers here."
+        recordCount={customers.length}
+        recordLabel="customers"
       />
 
-      <Table
+      <DataTable
         columns={columns}
         data={customers}
         isLoading={isLoading}
+        renderMobileCard={renderMobileCustomerCard}
         emptyTitle="No converted customers yet"
-        emptyDescription="Leads marked as 'Won' or converted from Lead Details will appear here."
+        emptyDescription="When a qualified lead is moved to 'Won' in the Sales Pipeline, they appear here as converted customers."
       />
     </div>
   );

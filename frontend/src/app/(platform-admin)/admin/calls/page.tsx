@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -59,7 +59,7 @@ export default function AdminCallsPage() {
     serviceDescription: '',
     instructions: 'Politely qualify the lead, inquire about budget and timeline, and offer a meeting.',
     language: 'hi-IN',
-    voice: 'meera',
+    voice: 'default',
     maxDurationSeconds: 300,
     closingStatement: 'Dhanyawad! Hamari sales team aapse jald hi sampark karegi.',
   });
@@ -110,7 +110,7 @@ export default function AdminCallsPage() {
       serviceDescription: service.description,
       instructions: 'Introduce the project, ask about preferred location and budget, and invite for a visit.',
       language: 'hi-IN',
-      voice: 'meera',
+      voice: 'default',
       maxDurationSeconds: 300,
       closingStatement: 'Dhanyawad! Hamare representative aapko brochure WhatsApp kar rahe hain.',
     });
@@ -162,7 +162,7 @@ export default function AdminCallsPage() {
       cell: (l) => (
         <div>
           <div className="font-semibold text-slate-900">{l.contact.fullName}</div>
-          <div className="text-[11px] text-slate-400 font-mono">{l.contact.phone}</div>
+          <div className="text-caption text-slate-400 font-mono">{l.contact.phone}</div>
         </div>
       ),
     },
@@ -175,7 +175,7 @@ export default function AdminCallsPage() {
       cell: (l) => (
         <div>
           <span className="font-semibold text-brand-700">{l.service?.name}</span>
-          <div className="text-[11px] text-slate-400">{l.service?.category}</div>
+          <div className="text-caption text-slate-400">{l.service?.category}</div>
         </div>
       ),
     },
@@ -208,7 +208,7 @@ export default function AdminCallsPage() {
       cell: (s) => (
         <div>
           <div className="font-semibold text-slate-900">{s.name}</div>
-          <div className="text-[11px] text-slate-500">{s.category}</div>
+          <div className="text-caption text-slate-500">{s.category}</div>
         </div>
       ),
     },
@@ -258,7 +258,7 @@ export default function AdminCallsPage() {
       cell: (c) => (
         <div>
           <div className="font-semibold text-slate-900">{c.lead?.contact?.fullName || c.recipientNumber}</div>
-          <div className="text-[11px] text-slate-400 font-mono">{c.recipientNumber}</div>
+          <div className="text-caption text-slate-400 font-mono">{c.recipientNumber}</div>
         </div>
       ),
     },
@@ -373,12 +373,12 @@ export default function AdminCallsPage() {
                 <div key={t.id} className="p-4 rounded-lg border border-slate-200 bg-slate-50">
                   <div className="flex items-center justify-between mb-1">
                     <h4 className="text-xs font-bold text-slate-900">{t.name}</h4>
-                    <span className="text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-semibold">
+                    <span className="text-micro bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-semibold">
                       {t.industry}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-600 mb-3">{t.description}</p>
-                  <div className="text-[10px] text-slate-500 font-mono bg-white p-2 rounded border border-slate-200 line-clamp-2">
+                  <p className="text-caption text-slate-600 mb-3">{t.description}</p>
+                  <div className="text-micro text-slate-500 font-mono bg-white p-2 rounded border border-slate-200 line-clamp-2">
                     {t.openingIntro}
                   </div>
                 </div>
@@ -438,16 +438,12 @@ export default function AdminCallsPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Voice Personality"
-              options={[
-                { value: 'meera', label: 'Meera (Expressive Female)' },
-                { value: 'arvind', label: 'Arvind (Professional Male)' },
-                { value: 'kavya', label: 'Kavya (Warm Female)' },
-              ]}
-              value={aiForm.voice}
-              onChange={(e) => setAiForm({ ...aiForm, voice: e.target.value })}
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Managed AI Engine</label>
+              <div className="text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-medium">
+                Sarvam Voice Agents (Bulbul V4 + Saaras v4)
+              </div>
+            </div>
             <Select
               label="Primary Language"
               options={[
@@ -501,7 +497,7 @@ export default function AdminCallsPage() {
           {testResult && (
             <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
               <p className="font-semibold text-slate-800 mb-1">Simulated Conversation Test Result:</p>
-              <pre className="text-[11px] text-slate-700 whitespace-pre-wrap font-sans bg-white p-2 rounded border border-slate-100">
+              <pre className="text-caption text-slate-700 whitespace-pre-wrap font-sans bg-white p-2 rounded border border-slate-100">
                 {testResult.testTranscript}
               </pre>
             </div>

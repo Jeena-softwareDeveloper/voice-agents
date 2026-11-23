@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { TelephonyService } from '../../integrations/telephony/telephony.service';
 import { SarvamService } from '../../integrations/sarvam/sarvam.service';
@@ -19,25 +19,33 @@ export class SettingsService {
       settingsMap[s.key] = s.value;
     });
 
-    const telephonyInventory = await this.telephonyService.getManagedInventory();
+    const telephonyInventory = await this.telephonyService.getAllNumbers();
     const sarvamStatus = await this.sarvamService.verifyCredentials();
-    const voices = this.sarvamService.getAvailableVoices();
-    const languages = this.sarvamService.getAvailableLanguages();
+
+    const providerMinuteCost = 0.95;
+    const clientSellingPrice = Number(settingsMap['ai_minute_rate'] || 1.8);
+    const platformMargin = parseFloat((((clientSellingPrice - providerMinuteCost) / clientSellingPrice) * 100).toFixed(1));
 
     return {
       aiProvider: {
         provider: 'Sarvam AI',
         status: sarvamStatus.status,
-        balanceRemaining: sarvamStatus.balanceRemaining,
-        baseUrl: settingsMap['sarvam_base_url'] || 'https://api.sarvam.ai/v1',
-        apiKeyMasked: 'srv_live_••••••••••••••••••••3fa9',
-        voices,
-        languages,
+        latencyMs: sarvamStatus.latencyMs,
+        balanceRemaining: sarvamStatus.availableCredits ?? 0,
+        runtimeEndpoint: 'Official Sarvam App Runtime (apps.sarvam.ai)',
+        apiKeyMasked: this.sarvamService.getMaskedKey(),
+        activeModel: sarvamStatus.activeModel || 'Sarvam Voice Agents (Saaras v4 + Bulbul V4)',
+        lastCheckedAt: sarvamStatus.lastCheckedAt,
+        voices: [],
+        languages: [],
       },
       telephony: {
         provider: 'Tata Tele / Sarvam Telephony Trunk',
         managedNumbers: telephonyInventory,
         activeRoutes: 'India (All Circles / TRAI Compliant)',
+        totalNumbers: telephonyInventory.length,
+        availableNumbers: telephonyInventory.filter((n) => n.status === 'AVAILABLE').length,
+        assignedNumbers: telephonyInventory.filter((n) => n.status === 'ASSIGNED').length,
       },
       callingRules: {
         defaultStartHour: Number(settingsMap['calling_start_hour'] || 9),
@@ -48,12 +56,22 @@ export class SettingsService {
         retryDelayHours: 2,
       },
       pricing: {
-        aiMinuteRateInr: Number(settingsMap['ai_minute_rate'] || 1.5),
+        providerMinuteCostInr: providerMinuteCost,
+        aiMinuteRateInr: clientSellingPrice,
         telephonyMinuteRateInr: Number(settingsMap['telephony_minute_rate'] || 0.4),
-        platformMarkupPercent: 15,
+        platformMarkupPercent: platformMargin,
         gstRatePercent: 18,
+        numberRentalMonthlyInr: 499,
       },
     };
+  }
+
+  async testSarvamConnection() {
+    return this.sarvamService.verifyCredentials();
+  }
+
+  async getSarvamLogs() {
+    return this.sarvamService.getProviderAuditLogs();
   }
 
   async updatePlatformSettings(dto: UpdateGlobalSettingsDto) {
@@ -127,5 +145,94 @@ export class SettingsService {
         isAutomatedCallingEnabled: dto.isAutomatedCallingEnabled,
       },
     });
+  }
+
+  async getCompanyProfile(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { businessProfile: true },
+    });
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found.');
+    }
+    return {
+      id: tenant.id,
+      companyName: tenant.businessProfile?.businessName || tenant.name,
+      registeredName: tenant.name,
+      email: tenant.email,
+      phone: tenant.phone,
+      website: tenant.businessProfile?.website || '',
+      address: tenant.businessProfile?.address || '',
+      city: tenant.city || '',
+      state: tenant.state || '',
+      country: tenant.country || 'India',
+      businessType: tenant.businessProfile?.category || tenant.businessType || 'Enterprise Services',
+      status: tenant.status,
+    };
+  }
+
+  async updateCompanyProfile(
+    tenantId: string,
+    dto: {
+      companyName: string;
+      email?: string;
+      phone?: string;
+      website?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      businessType?: string;
+    },
+  ) {
+    if (!dto.companyName || !dto.companyName.trim()) {
+      throw new BadRequestException('Company name cannot be empty.');
+    }
+
+    const trimmedName = dto.companyName.trim();
+
+    // 1. Update tenant record
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        name: trimmedName,
+        ...(dto.email ? { email: dto.email } : {}),
+        ...(dto.phone ? { phone: dto.phone } : {}),
+        ...(dto.city ? { city: dto.city } : {}),
+        ...(dto.state ? { state: dto.state } : {}),
+        ...(dto.businessType ? { businessType: dto.businessType } : {}),
+      },
+    });
+
+    // 2. Upsert business profile
+    await this.prisma.tenantBusinessProfile.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        businessName: trimmedName,
+        category: dto.businessType || 'Enterprise Services',
+        description: '',
+        website: dto.website || '',
+        address: dto.address || '',
+      },
+      update: {
+        businessName: trimmedName,
+        website: dto.website || '',
+        address: dto.address || '',
+        ...(dto.businessType ? { category: dto.businessType } : {}),
+      },
+    });
+
+    // 3. Flag existing agent configurations as outdated for change detection
+    try {
+      await (this.prisma as any).tenantAgentConfiguration.updateMany({
+        where: { tenantId, status: { in: ['APPROVED', 'PUBLISHED'] } },
+        data: {
+          isOutdated: true,
+          outdatedReason: 'Company profile details were modified. Review and regenerate AI instructions.',
+        },
+      });
+    } catch {}
+
+    return this.getCompanyProfile(tenantId);
   }
 }

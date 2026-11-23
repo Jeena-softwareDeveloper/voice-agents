@@ -123,7 +123,10 @@ export class TenantsService {
       return { tenant, user, invitation };
     });
 
-    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendBaseUrl = process.env.FRONTEND_URL;
+    if (!frontendBaseUrl) {
+      throw new Error('Missing required environment configuration: FRONTEND_URL');
+    }
     const invitationLink = `${frontendBaseUrl}/activate-account?token=${token}`;
 
     await this.emailService.sendInvitationEmail(

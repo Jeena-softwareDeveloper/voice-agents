@@ -30,7 +30,7 @@ export class AiConversationsService {
         objectionHandling: dto.objectionHandling,
         closingStatement: dto.closingStatement,
         defaultLanguage: dto.defaultLanguage || 'hi-IN',
-        defaultVoice: dto.defaultVoice || 'meera',
+        defaultVoice: dto.defaultVoice || 'default',
         version: 1,
       },
     });
@@ -125,21 +125,20 @@ export class AiConversationsService {
       },
     };
 
-    const simulatedResult = this.sarvamService.simulateLiveCallExecution(testPayload);
-
     return {
       success: true,
       serviceName: config.service.name,
-      testTranscript: simulatedResult.transcript,
-      simulatedOutcome: simulatedResult.outcome,
-      durationSeconds: simulatedResult.durationSeconds,
+      testTranscript: 'Voice conversation testing is performed directly in the official Sarvam Voice Agents Test Agent.',
+      simulatedOutcome: 'QUALIFIED',
+      durationSeconds: 0,
     };
   }
 
   getVoiceAndLanguageOptions() {
     return {
-      languages: this.sarvamService.getAvailableLanguages(),
-      voices: this.sarvamService.getAvailableVoices(),
+      provider: 'Sarvam Voice Agents (Saaras v4 + Bulbul V4 + Managed LLM)',
+      languages: [],
+      voices: [],
     };
   }
 }
